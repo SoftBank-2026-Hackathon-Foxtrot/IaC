@@ -1,0 +1,12 @@
+{
+  "code": "PLAN_STALE",
+  "message": "설정 또는 실행 조건이 변경되어 새 plan이 필요합니다.",
+  "request_id": "req_001",
+  "issues": [
+    {
+      "code": "REVISION_CHANGED",
+      "field": "expected_revision",
+      "message": "현재 설정 revision이 검토한 plan과 다릅니다."
+    }
+  ]
+}

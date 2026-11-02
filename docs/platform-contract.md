@@ -1,5 +1,7 @@
 # 플랫폼 입출력과 시각화 계약
 
+UI·백엔드·실행 조정기 사이의 호출/상태/승인 계약은 [프로비저닝 인터페이스 v0.1](provisioning-interface.md)과 [OpenAPI](../contracts/provisioning.openapi.yaml)를 참고합니다. 이 문서는 Terraform 입력과 메타데이터의 의미를 설명합니다.
+
 ## 입력을 둘로 분리
 
 **사람/플랫폼:** 계정·프로젝트, 리전/AZ, 네트워크 CIDR, 웹/관리 접근 범위, image/엔진 버전, bucket 이름, 삭제 보호, 메타데이터.

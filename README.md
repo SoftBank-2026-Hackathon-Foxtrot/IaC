@@ -34,6 +34,8 @@ AI 추천 API/모델 호출, 사용자 승인 UI, apply 실행기, 실제 비용
 ## 먼저 볼 파일
 
 - [구조·선택 이유·네트워크 구성도](docs/design.md)
+- [UI·실행 조정기 연동 인터페이스 명세](docs/provisioning-interface.md) — 팀 역할, 상태, 승인·오류 처리
+- [OpenAPI 초안](contracts/provisioning.openapi.yaml) · [요청/응답 예시](contracts/examples/index.json) — 서버 미구현
 - [입력, AI 추천, 태그·라벨 계약](docs/platform-contract.md)
 - [실행·권한·state·삭제·검증 안내](docs/operations.md)
 - [AWS 설정 예시](environments/aws/deployment.example.tfvars.json)
@@ -55,6 +57,8 @@ modules/
 catalog/                # 플랫폼/AI가 사용하는 사양 allowlist
 examples/               # 추천 JSON, backend 설정 샘플
 tools/render_inputs.py  # 입력 검사·추천값 병합 (Python 표준 라이브러리)
+contracts/              # 프로비저닝 OpenAPI와 UI/팀 연동용 JSON 예시
+tools/build_contract.py # 카탈로그를 반영한 명세·예시 생성기 (API 서버 아님)
 tests/                  # AI 입력 경계·CIDR 검사 회귀 테스트
 docs/                   # 설계·플랫폼 계약·운영 절차
 ```
@@ -75,6 +79,7 @@ docs/                   # 설계·플랫폼 계약·운영 절차
 Terraform `>= 1.10, < 2`, Python `>= 3.10` 필요. 검증에 사용한 Terraform은 `1.13.5`이며 provider 버전은 각 root의 lock 파일에 고정합니다.
 
 ```bash
+python -m pip install -r requirements-contracts.txt
 python -m unittest discover -s tests -v
 terraform fmt -check -recursive
 terraform -chdir=environments/aws init -backend=false

@@ -1,0 +1,479 @@
+{
+  "id": "aws-web",
+  "version": "v0.1",
+  "cloud": "aws",
+  "lifecycle": "DRAFT",
+  "input_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "deployment_id": {
+        "type": "string",
+        "x-ui": {
+          "group": "platform",
+          "editable_by": [
+            "editor"
+          ],
+          "ai_recommendable": false
+        },
+        "title": "클라우드 자원 이름 접두사",
+        "pattern": "^[a-z][a-z0-9-]{2,19}$",
+        "description": "Cloud-native deployment name. Immutable after draft creation."
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "poc",
+              "dev"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+          },
+          "cost_center": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+          },
+          "workload": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+          },
+          "migration_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+          },
+          "data_class": {
+            "type": "string",
+            "enum": [
+              "public",
+              "internal",
+              "confidential"
+            ]
+          },
+          "expires_on": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "project",
+          "environment",
+          "owner",
+          "cost_center",
+          "workload",
+          "migration_id",
+          "data_class",
+          "expires_on"
+        ],
+        "x-ui": {
+          "group": "platform",
+          "editable_by": [
+            "editor"
+          ],
+          "ai_recommendable": false
+        },
+        "title": "소유권·비용 추적 정보"
+      },
+      "region": {
+        "type": "string",
+        "x-ui": {
+          "group": "platform",
+          "editable_by": [
+            "editor"
+          ],
+          "ai_recommendable": false
+        },
+        "title": "리전"
+      },
+      "account_id": {
+        "type": "string",
+        "x-ui": {
+          "group": "platform",
+          "editable_by": [
+            "editor"
+          ],
+          "ai_recommendable": false
+        },
+        "title": "AWS 계정",
+        "pattern": "^[0-9]{12}$"
+      },
+      "bucket_name": {
+        "type": "string",
+        "x-ui": {
+          "group": "platform",
+          "editable_by": [
+            "editor"
+          ],
+          "ai_recommendable": false
+        },
+        "title": "파일 저장소 이름",
+        "pattern": "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"
+      },
+      "database_name": {
+        "type": "string",
+        "x-ui": {
+          "group": "platform",
+          "editable_by": [
+            "editor"
+          ],
+          "ai_recommendable": false
+        },
+        "title": "초기 DB 이름",
+        "pattern": "^[a-z][a-z0-9]{0,30}$"
+      },
+      "web_ingress_cidrs": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "description": "IPv4 CIDR; host bits, overlap and subnet containment require semantic validation."
+        },
+        "minItems": 1,
+        "uniqueItems": true,
+        "x-ui": {
+          "group": "network-policy",
+          "editable_by": [
+            "infra_admin"
+          ],
+          "ai_recommendable": false
+        }
+      },
+      "web_ports": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "enum": [
+            80,
+            443,
+            8080
+          ]
+        },
+        "minItems": 1,
+        "uniqueItems": true,
+        "x-ui": {
+          "group": "network-policy",
+          "editable_by": [
+            "infra_admin"
+          ],
+          "ai_recommendable": false
+        }
+      },
+      "admin_cidrs": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "description": "IPv4 CIDR; host bits, overlap and subnet containment require semantic validation."
+        },
+        "uniqueItems": true,
+        "description": "/24~32 only. Empty by default.",
+        "x-ui": {
+          "group": "network-policy",
+          "editable_by": [
+            "infra_admin"
+          ],
+          "ai_recommendable": false
+        }
+      },
+      "deletion_protection": {
+        "type": "boolean",
+        "x-ui": {
+          "group": "network-policy",
+          "editable_by": [
+            "infra_admin"
+          ],
+          "ai_recommendable": false
+        },
+        "title": "DB 삭제 보호"
+      },
+      "final_snapshot_identifier": {
+        "type": "string",
+        "x-ui": {
+          "group": "platform",
+          "editable_by": [
+            "editor"
+          ],
+          "ai_recommendable": false
+        },
+        "title": "삭제 전 최종 스냅샷 이름"
+      },
+      "network": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "vpc_cidr": {
+            "type": "string"
+          },
+          "public_subnet_cidr": {
+            "type": "string"
+          },
+          "private_subnet_cidrs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "IPv4 CIDR; host bits, overlap and subnet containment require semantic validation."
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "availability_zones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "vpc_cidr",
+          "public_subnet_cidr",
+          "private_subnet_cidrs",
+          "availability_zones"
+        ],
+        "x-ui": {
+          "group": "network-policy",
+          "editable_by": [
+            "infra_admin"
+          ],
+          "ai_recommendable": false
+        },
+        "title": "네트워크 구성"
+      },
+      "sizing": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "compute_instance_type": {
+            "type": "string",
+            "enum": [
+              "t3.small",
+              "t3.medium",
+              "m6i.large"
+            ],
+            "title": "앱 서버 사양",
+            "default": "t3.small",
+            "x-ui": {
+              "group": "sizing",
+              "editable_by": [
+                "editor"
+              ],
+              "ai_recommendable": true
+            }
+          },
+          "compute_disk_gib": {
+            "type": "integer",
+            "minimum": 20,
+            "maximum": 200,
+            "title": "앱 디스크 용량 (GiB)",
+            "default": 30,
+            "x-ui": {
+              "group": "sizing",
+              "editable_by": [
+                "editor"
+              ],
+              "ai_recommendable": true
+            }
+          },
+          "db_instance_class": {
+            "type": "string",
+            "enum": [
+              "db.t3.micro",
+              "db.t3.small",
+              "db.m6g.large"
+            ],
+            "title": "DB 사양",
+            "default": "db.t3.micro",
+            "x-ui": {
+              "group": "sizing",
+              "editable_by": [
+                "editor"
+              ],
+              "ai_recommendable": true
+            }
+          },
+          "db_storage_gib": {
+            "type": "integer",
+            "minimum": 20,
+            "maximum": 200,
+            "title": "DB 초기 용량 (GiB)",
+            "default": 20,
+            "x-ui": {
+              "group": "sizing",
+              "editable_by": [
+                "editor"
+              ],
+              "ai_recommendable": true
+            }
+          },
+          "db_max_storage_gib": {
+            "type": "integer",
+            "minimum": 22,
+            "maximum": 500,
+            "title": "DB 자동 확장 상한 (GiB)",
+            "default": 100,
+            "x-ui": {
+              "group": "sizing",
+              "editable_by": [
+                "editor"
+              ],
+              "ai_recommendable": true
+            }
+          },
+          "db_multi_az": {
+            "type": "boolean",
+            "title": "DB Multi-AZ",
+            "default": false,
+            "x-ui": {
+              "group": "sizing",
+              "editable_by": [
+                "editor"
+              ],
+              "ai_recommendable": true
+            }
+          },
+          "cache_node_type": {
+            "type": "string",
+            "enum": [
+              "cache.t3.micro",
+              "cache.t3.small",
+              "cache.m6g.large"
+            ],
+            "title": "캐시 노드 사양",
+            "default": "cache.t3.micro",
+            "x-ui": {
+              "group": "sizing",
+              "editable_by": [
+                "editor"
+              ],
+              "ai_recommendable": true
+            }
+          },
+          "cache_node_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "title": "캐시 노드 수",
+            "default": 1,
+            "x-ui": {
+              "group": "sizing",
+              "editable_by": [
+                "editor"
+              ],
+              "ai_recommendable": true
+            }
+          }
+        },
+        "required": [
+          "compute_instance_type",
+          "compute_disk_gib",
+          "db_instance_class",
+          "db_storage_gib",
+          "db_max_storage_gib",
+          "db_multi_az",
+          "cache_node_type",
+          "cache_node_count"
+        ]
+      },
+      "key_name": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Existing key pair; infra_admin only.",
+        "x-ui": {
+          "group": "network-policy",
+          "editable_by": [
+            "infra_admin"
+          ],
+          "ai_recommendable": false
+        }
+      }
+    },
+    "required": [
+      "deployment_id",
+      "metadata",
+      "region",
+      "account_id",
+      "bucket_name",
+      "database_name",
+      "web_ingress_cidrs",
+      "web_ports",
+      "admin_cidrs",
+      "deletion_protection",
+      "final_snapshot_identifier",
+      "network",
+      "sizing"
+    ]
+  },
+  "default_inputs": {
+    "deployment_id": "fox-aws-poc01",
+    "metadata": {
+      "project": "foxtrot",
+      "environment": "poc",
+      "owner": "platform-team",
+      "cost_center": "hackathon",
+      "workload": "web",
+      "migration_id": "mig-001",
+      "data_class": "internal",
+      "expires_on": "2026-12-01"
+    },
+    "region": "ap-northeast-2",
+    "account_id": "123456789012",
+    "bucket_name": "replace-with-globally-unique-aws-bucket",
+    "database_name": "app",
+    "web_ingress_cidrs": [
+      "0.0.0.0/0"
+    ],
+    "web_ports": [
+      80,
+      443
+    ],
+    "admin_cidrs": [],
+    "deletion_protection": true,
+    "final_snapshot_identifier": "fox-aws-poc01-final-unique",
+    "network": {
+      "vpc_cidr": "10.20.0.0/16",
+      "public_subnet_cidr": "10.20.0.0/24",
+      "private_subnet_cidrs": [
+        "10.20.10.0/24",
+        "10.20.11.0/24"
+      ],
+      "availability_zones": [
+        "ap-northeast-2a",
+        "ap-northeast-2c"
+      ]
+    },
+    "sizing": {
+      "compute_instance_type": "t3.small",
+      "compute_disk_gib": 30,
+      "db_instance_class": "db.t3.micro",
+      "db_storage_gib": 20,
+      "db_max_storage_gib": 100,
+      "db_multi_az": false,
+      "cache_node_type": "cache.t3.micro",
+      "cache_node_count": 1
+    }
+  },
+  "image_profiles": [],
+  "fixed_rules": [
+    "database-private-only",
+    "cache-tls-and-auth",
+    "storage-public-access-blocked"
+  ],
+  "limitations": [
+    "Template and image profile need explicit approval before plan.",
+    "Examples contain account/project/bucket placeholders.",
+    "Container runtime is not installed by current Terraform modules."
+  ]
+}

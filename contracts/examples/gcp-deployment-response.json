@@ -1,0 +1,60 @@
+{
+  "id": "dep_gcp_001",
+  "revision": 1,
+  "configuration": {
+    "template_id": "gcp-web",
+    "template_version": "v0.1",
+    "cloud_connection_id": "conn_gcp_poc",
+    "image_profile_id": "img_web_x86_v1",
+    "secret_bindings": {},
+    "inputs": {
+      "deployment_id": "fox-gcp-poc01",
+      "metadata": {
+        "project": "foxtrot",
+        "environment": "poc",
+        "owner": "platform-team",
+        "cost_center": "hackathon",
+        "workload": "web",
+        "migration_id": "mig-001",
+        "data_class": "internal",
+        "expires_on": "2026-12-01"
+      },
+      "region": "asia-northeast3",
+      "zone": "asia-northeast3-a",
+      "project_id": "replace-with-project-id",
+      "bucket_name": "replace-with-globally-unique-gcp-bucket",
+      "database_name": "app",
+      "web_ingress_cidrs": [
+        "0.0.0.0/0"
+      ],
+      "web_ports": [
+        80,
+        443
+      ],
+      "admin_cidrs": [],
+      "deletion_protection": true,
+      "network": {
+        "subnet_cidr": "10.30.0.0/24",
+        "service_range_address": "10.31.0.0",
+        "service_range_prefix": 16
+      },
+      "sizing": {
+        "compute_machine_type": "e2-small",
+        "compute_disk_gib": 30,
+        "db_tier": "db-custom-1-3840",
+        "db_storage_gib": 20,
+        "db_max_storage_gib": 100,
+        "db_high_availability": false,
+        "cache_memory_gib": 1,
+        "cache_high_availability": false
+      }
+    }
+  },
+  "state": "DRAFT",
+  "active_job_id": null,
+  "latest_plan_id": null,
+  "allowed_actions": [
+    "EDIT_CONFIGURATION",
+    "REQUEST_RECOMMENDATION"
+  ]
+}

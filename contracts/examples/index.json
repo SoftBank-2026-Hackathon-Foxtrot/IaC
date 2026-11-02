@@ -1,0 +1,58 @@
+[
+  {
+    "file": "examples/aws-create-request.json",
+    "schema": "CreateDeployment"
+  },
+  {
+    "file": "examples/aws-template-response.json",
+    "schema": "Template"
+  },
+  {
+    "file": "examples/aws-deployment-response.json",
+    "schema": "Deployment"
+  },
+  {
+    "file": "examples/aws-handoff-response.json",
+    "schema": "Handoff"
+  },
+  {
+    "file": "examples/gcp-create-request.json",
+    "schema": "CreateDeployment"
+  },
+  {
+    "file": "examples/gcp-template-response.json",
+    "schema": "Template"
+  },
+  {
+    "file": "examples/gcp-deployment-response.json",
+    "schema": "Deployment"
+  },
+  {
+    "file": "examples/gcp-handoff-response.json",
+    "schema": "Handoff"
+  },
+  {
+    "file": "examples/recommendation-response.json",
+    "schema": "Recommendation"
+  },
+  {
+    "file": "examples/accept-recommendation-request.json",
+    "schema": "AcceptRecommendation"
+  },
+  {
+    "file": "examples/plan-response.json",
+    "schema": "Plan"
+  },
+  {
+    "file": "examples/apply-request.json",
+    "schema": "ApplyRequest"
+  },
+  {
+    "file": "examples/job-response.json",
+    "schema": "Job"
+  },
+  {
+    "file": "examples/stale-plan-error.json",
+    "schema": "Error"
+  }
+]
