@@ -26,6 +26,8 @@ AWS Redis token은 비밀 저장소에서 `TF_VAR_redis_auth_token`으로 주입
 
 두 클라우드와 각 배포마다 state key/prefix를 분리합니다. 실패 후 state 파일을 삭제해서 재실행하지 말고 실제 자원·state를 대조합니다. 동시에 같은 배포를 실행하지 않습니다.
 
+provider 버전을 갱신하면 각 root에서 `terraform providers lock -platform=windows_amd64 -platform=linux_amd64`를 실행해 로컬 Windows와 Linux CI의 체크섬을 함께 기록합니다. CI의 `-lockfile=readonly` 검증은 유지합니다.
+
 ## 검사·계획 명령
 
 저장소 root에서 실행합니다. AWS secret은 아래 명령 전에 외부에서 주입되어 있어야 합니다.
