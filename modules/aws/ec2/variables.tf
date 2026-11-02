@@ -1,0 +1,45 @@
+variable "name" {
+  type        = string
+  description = "배포별 고유 이름. root에서 검증합니다."
+}
+
+variable "tags" {
+  type        = map(string)
+  description = "필수 추적 메타데이터. 비밀값과 개인정보를 넣지 않습니다."
+}
+
+variable "ami_id" {
+  type        = string
+  description = "검토한 x86_64 AMI ID"
+}
+
+variable "instance_type" {
+  type        = string
+  description = "인스턴스 사양"
+}
+
+variable "root_disk_gib" {
+  type        = number
+  description = "암호화 gp3 루트 디스크 GiB"
+}
+
+variable "subnet_id" {
+  type        = string
+  description = "public subnet ID"
+}
+
+variable "security_group_id" {
+  type        = string
+  description = "앱 SG ID"
+}
+
+variable "instance_profile_name" {
+  type        = string
+  description = "앱 IAM instance profile"
+}
+
+variable "key_name" {
+  type        = string
+  description = "SSH를 사용할 때 기존 EC2 key pair 이름"
+  default     = null
+}

@@ -1,0 +1,38 @@
+name: Validate IaC (no cloud deployment)
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -v
+      - run: python tools/render_inputs.py validate --cloud aws --base environments/aws/deployment.example.tfvars.json
+      - run: python tools/render_inputs.py validate --cloud gcp --base environments/gcp/deployment.example.tfvars.json
+
+  terraform:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cloud: [aws, gcp]
+    defaults:
+      run:
+        working-directory: environments/${{ matrix.cloud }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.13.5'
+      - run: terraform fmt -check -recursive ../..
+      - run: terraform init -backend=false -input=false -lockfile=readonly
+      - run: terraform validate -no-color
+      - run: terraform test -no-color
