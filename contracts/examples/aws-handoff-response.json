@@ -1,9 +1,11 @@
 {
-  "deployment_id": "dep_aws_001",
-  "applied_revision": 2,
-  "readiness": "RESOURCES_CREATED",
-  "container_runtime": "NOT_CHECKED",
-  "handoff": {
+  "migration_id": "mig_to_aws",
+  "target": {
+    "id": "env_aws_target",
+    "cloud": "aws"
+  },
+  "readiness": "INFRA_APPLIED",
+  "outputs": {
     "schema_version": 1,
     "cloud": "aws",
     "deployment_id": "fox-aws-poc01",

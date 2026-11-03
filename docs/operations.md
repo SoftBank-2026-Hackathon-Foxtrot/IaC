@@ -1,12 +1,18 @@
 # 실행과 검증
 
-## 실행 전 준비
+## 환경 최초 준비 — 플랫폼 관리자의 사전 작업
+
+이 절차는 플랫폼에 아직 관리 설정이 없는 환경을 최초로 준비하는 경우입니다. 마이그레이션 UI/API는 원본·대상 코드, baseline, state, 인증 연결이 이미 준비되었다고 가정하며 사용자에게 아래 설정을 반복 입력받지 않습니다.
 
 1. 대상 AWS 계정/GCP 프로젝트와 billing, 리전 가용성·quota를 확인합니다. 이 코드가 계정·프로젝트를 만들지 않습니다.
 2. 예시를 복사해 실제 설정을 작성합니다. bucket 이름은 전역 고유, 배포 ID는 환경별 고유하게 지정합니다. `expires_on`도 실제 계획에 맞춰 수정합니다.
 3. `render_inputs.py validate`로 baseline을 검사하고 필요하면 AI 추천을 `render`로 별도 파일에 병합합니다.
 4. state backend와 자격 증명을 준비합니다. mock 검사 이후 실제 backend 사용 시 다시 `terraform init`합니다.
 5. 실제 plan에서 계정·리전·사양·생성/교체/삭제 목록·비용 영향을 검토합니다. 승인한 saved plan을 실행하는 것은 플랫폼 실행기 담당입니다.
+
+## 관리 중인 환경에서의 마이그레이션
+
+기존 migration_id로 대상 root·baseline·backend를 조회하고, 허용된 sizing 변경값만 병합해 plan합니다. 이미 있는 대상 자원에 빈 state를 연결하지 않으며 원본 state에는 apply하지 않습니다. 사용자 확인 후 같은 saved plan을 실행하고 성공한 설정을 대상 baseline에 반영합니다. 출력과 후속 작업은 [인터페이스 v0.2](provisioning-interface.md)를 따릅니다. 현재 저장소에는 이 실행기나 baseline 저장소가 구현되어 있지 않습니다.
 
 ## 인증과 권한
 

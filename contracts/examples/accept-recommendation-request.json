@@ -1,7 +1,0 @@
-{
-  "expected_revision": 1,
-  "recommendation_id": "rec_001",
-  "selected_fields": [
-    "sizing.compute_disk_gib"
-  ]
-}

@@ -102,8 +102,17 @@ def validate_config(cloud, config):
             "Overlapping network ranges")
 
 
-def merge_recommendation(cloud, baseline, proposal):
+def merge_overrides(cloud, baseline, overrides):
+    """Merge UI-selected sizing into a platform-managed target baseline."""
     validate_config(cloud, baseline)
+    validate_sizing(cloud, overrides, complete=False)
+    result = copy.deepcopy(baseline)
+    result["sizing"].update(overrides)
+    validate_config(cloud, result)
+    return result
+
+
+def merge_recommendation(cloud, baseline, proposal):
     require(type(proposal) is dict and set(proposal) == {"cloud", "parameters", "rationale"},
             "Proposal must contain only cloud, parameters and rationale")
     require(proposal["cloud"] == cloud, "Proposal cloud differs from the selected target")
@@ -113,10 +122,7 @@ def merge_recommendation(cloud, baseline, proposal):
     require(type(rationale) is dict and rationale.keys() == params.keys(), "Each recommendation needs a rationale")
     require(all(type(v) is str and 1 <= len(v.strip()) <= 2000 for v in rationale.values()),
             "Rationale must be bounded, nonempty text")
-    result = copy.deepcopy(baseline)
-    result["sizing"].update(params)
-    validate_config(cloud, result)
-    return result
+    return merge_overrides(cloud, baseline, params)
 
 
 def main():

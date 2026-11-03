@@ -1,9 +1,11 @@
 {
-  "deployment_id": "dep_gcp_001",
-  "applied_revision": 2,
-  "readiness": "RESOURCES_CREATED",
-  "container_runtime": "NOT_CHECKED",
-  "handoff": {
+  "migration_id": "mig_to_gcp",
+  "target": {
+    "id": "env_gcp_target",
+    "cloud": "gcp"
+  },
+  "readiness": "INFRA_APPLIED",
+  "outputs": {
     "schema_version": 1,
     "cloud": "gcp",
     "deployment_id": "fox-gcp-poc01",
@@ -28,7 +30,7 @@
     },
     "database": {
       "id": "example-db-id",
-      "host": "10.31.0.10",
+      "host": "example.private",
       "port": 5432,
       "name": "app",
       "tls_required": true,
@@ -38,7 +40,7 @@
     },
     "cache": {
       "id": "example-cache-id",
-      "host": "10.31.1.10",
+      "host": "example.redis.private",
       "port": 6378,
       "tls_required": true,
       "auth_source": "memorystore-get-auth-string-via-authorized-bootstrap",

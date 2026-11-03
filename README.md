@@ -1,8 +1,8 @@
 # Foxtrot IaC — AWS / GCP 프로비저닝 초안
 
-**검토한 Terraform 구성을 플랫폼에 등록하고, AI는 허용된 사양·용량만 추천합니다.** 사람은 추천 근거와 plan을 확인한 후 실행합니다. 이 저장소는 해당 기반 모듈과 입력 계약을 제공합니다.
+**원본·이전 대상 환경의 배포 코드와 기본 설정은 이미 플랫폼이 관리합니다.** 사용자는 EC2 사양 같은 일부 값만 조정하고, 필요하면 AI 추천을 받아 대상의 Terraform plan을 확인·실행합니다. 이 저장소는 그 기반 모듈과 입력 계약을 제공합니다.
 
-현재 버전: `v0.1` / PoC·개발 환경 전용. Kubernetes는 필요하지 않습니다.
+Terraform 모듈 `v0.1` / 연동 계약 `v0.2` / PoC·개발 환경 전용. Kubernetes는 필요하지 않습니다.
 
 ## 무엇을 만드는가
 
@@ -19,14 +19,13 @@
 
 ```mermaid
 flowchart LR
-  H[사람이 검토한 네트워크·권한·메타데이터] --> C[환경별 입력값]
-  AI[AI 사양 추천 JSON] --> V[허용 항목·범위 검사]
+  M[기존 migration_id] --> B[플랫폼의 대상 코드·설정·state]
+  U[UI 사양 조정·선택적 AI 추천] --> V[허용 변경값 검증]
+  B --> C[기존 대상 설정에 변경값만 병합]
   V --> C
-  C --> P[Terraform plan 검토]
-  P --> A[AWS 구성 실행]
-  P --> G[GCP 구성 실행]
-  A --> O[자원 식별자·접속 정보·후속 검증 목록]
-  G --> O
+  C --> P[대상 Terraform plan 확인]
+  P --> A[같은 saved plan 실행]
+  A --> O[진행 상태·인프라 출력 인계]
 ```
 
 AI 추천 API/모델 호출, 사용자 승인 UI, apply 실행기, 실제 비용 수집기는 이 초안의 범위 밖입니다. 추천 JSON을 받아 안전하게 입력 파일로 만드는 작은 도구는 포함합니다.
@@ -34,7 +33,7 @@ AI 추천 API/모델 호출, 사용자 승인 UI, apply 실행기, 실제 비용
 ## 먼저 볼 파일
 
 - [구조·선택 이유·네트워크 구성도](docs/design.md)
-- [UI·실행 조정기 연동 인터페이스 명세](docs/provisioning-interface.md) — 팀 역할, 상태, 승인·오류 처리
+- [UI·실행 조정기 연동 인터페이스](docs/provisioning-interface.md) — 관리 중인 환경 전제, API 5개, 입출력·담당
 - [OpenAPI 초안](contracts/provisioning.openapi.yaml) · [요청/응답 예시](contracts/examples/index.json) — 서버 미구현
 - [입력, AI 추천, 태그·라벨 계약](docs/platform-contract.md)
 - [실행·권한·state·삭제·검증 안내](docs/operations.md)
@@ -56,14 +55,14 @@ modules/
     network/ firewall/ iam/ compute/ cloud_sql/ memorystore/ storage/
 catalog/                # 플랫폼/AI가 사용하는 사양 allowlist
 examples/               # 추천 JSON, backend 설정 샘플
-tools/render_inputs.py  # 입력 검사·추천값 병합 (Python 표준 라이브러리)
+tools/render_inputs.py  # 입력 검사·UI 변경값/추천값 병합 (Python 표준 라이브러리)
 contracts/              # 프로비저닝 OpenAPI와 UI/팀 연동용 JSON 예시
 tools/build_contract.py # 카탈로그를 반영한 명세·예시 생성기 (API 서버 아님)
 tests/                  # AI 입력 경계·CIDR 검사 회귀 테스트
 docs/                   # 설계·플랫폼 계약·운영 절차
 ```
 
-각 서비스 모듈은 provider를 내부에서 설정하지 않습니다. root가 계정·리전을 결정하고 의존성을 연결합니다. 기존 state import나 클라우드 간 Terraform state 변환은 하지 않습니다.
+각 서비스 모듈은 provider를 내부에서 설정하지 않습니다. root가 계정·리전을 결정하고 의존성을 연결합니다. 원본과 대상의 코드는 각각 관리하며, 기존 대상 자원은 기존 state로 plan/apply합니다. 인프라 탐지·코드 변환·환경 등록은 이 인터페이스의 범위가 아닙니다.
 
 ## 기본 동작
 

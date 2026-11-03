@@ -1,680 +1,94 @@
 openapi: 3.1.0
 info:
-  title: Foxtrot Provisioning Interface — DRAFT
-  version: 0.1.0
-  description: Contract proposal only. No API server, auth, job queue or runner is implemented. Base path can be mounted in
-    the platform backend. See docs/provisioning-interface.md.
+  title: Foxtrot Managed Provisioning — DRAFT
+  version: 0.2.0
+  description: Source and target code, baseline, state and credentials are already managed by the platform. Only target sizing
+    can change. Specification only; no API or runner implemented. See docs/provisioning-interface.md.
 servers:
 - url: /api/v1/provisioning
 security:
 - platformBearer: []
 paths:
-  /templates:
+  /migrations/{migration_id}:
     get:
-      operationId: listTemplates
-      summary: 사용 가능한 템플릿 목록
-      x-required-permission: provision:read
+      operationId: getProvisioningContext
+      summary: 관리 중인 원본·대상과 조정 가능한 사양 조회
+      parameters:
+      - $ref: '#/components/parameters/MigrationId'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TemplateList'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters: []
-  /templates/{template_id}/versions/{version}:
-    get:
-      operationId: getTemplate
-      summary: 폼 스키마·기본값·고정 규칙·이미지 후보 조회
-      x-required-permission: provision:read
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Template'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters:
-      - $ref: '#/components/parameters/TemplateId'
-      - $ref: '#/components/parameters/TemplateVersion'
-  /deployments:
-    post:
-      operationId: createDeployment
-      summary: 설정 초안 생성 (자원 생성 없음)
-      x-required-permission: provision:edit
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Deployment'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateDeployment'
-  /deployments/{deployment_id}:
-    get:
-      operationId: getDeployment
-      summary: 설정과 현재 가능한 행동 조회
-      x-required-permission: provision:read
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Deployment'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters:
-      - $ref: '#/components/parameters/DeploymentId'
-  /deployments/{deployment_id}/configuration:
-    put:
-      operationId: replaceConfiguration
-      summary: 전체 설정 교체와 revision 증가
-      x-required-permission: provision:edit
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Deployment'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters:
-      - $ref: '#/components/parameters/DeploymentId'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReplaceConfiguration'
-  /deployments/{deployment_id}/recommendations:
+                $ref: '#/components/schemas/Context'
+        default:
+          $ref: '#/components/responses/Error'
+  /migrations/{migration_id}/recommendations:
     post:
       operationId: recommendSizing
-      summary: 사양 추천 작업; 초안은 변경하지 않음
-      x-required-permission: provision:edit
-      responses:
-        '202':
-          description: Accepted; poll returned job ID.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Job'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+      summary: 대상 사양 추천; 저장·적용하지 않음
       parameters:
-      - $ref: '#/components/parameters/DeploymentId'
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/MigrationId'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recommendation'
+        default:
+          $ref: '#/components/responses/Error'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RecommendationRequest'
-  /deployments/{deployment_id}/recommendation-acceptances:
-    post:
-      operationId: acceptRecommendation
-      summary: 선택한 추천 항목만 서버에서 병합
-      x-required-permission: provision:edit
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Deployment'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters:
-      - $ref: '#/components/parameters/DeploymentId'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AcceptRecommendation'
-  /deployments/{deployment_id}/plans:
+  /migrations/{migration_id}/plans:
     post:
       operationId: createPlan
-      summary: 특정 설정 revision의 계획 생성
-      x-required-permission: provision:plan
+      summary: 대상 baseline에 변경값을 병합해 plan 생성
+      parameters:
+      - $ref: '#/components/parameters/MigrationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '202':
-          description: Accepted; poll returned job ID.
+          description: Poll job for result.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Job'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters:
-      - $ref: '#/components/parameters/DeploymentId'
-      - $ref: '#/components/parameters/IdempotencyKey'
+        default:
+          $ref: '#/components/responses/Error'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RevisionRequest'
-  /plans/{plan_id}:
-    get:
-      operationId: getPlan
-      summary: 민감값을 제거한 계획과 검토 digest 조회
-      x-required-permission: provision:read
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Plan'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+              $ref: '#/components/schemas/PlanRequest'
+  /plans/{plan_id}/apply:
+    post:
+      operationId: applyPlan
+      summary: 검토한 불변 saved plan 실행; 요청 본문 없음
       parameters:
       - $ref: '#/components/parameters/PlanId'
-  /deployments/{deployment_id}/apply:
-    post:
-      operationId: approveAndApply
-      summary: 검토한 plan 승인 기록과 실행 등록을 원자적으로 처리
-      x-required-permission: provision:apply
+      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '202':
-          description: Accepted; poll returned job ID.
+          description: Poll job for result.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Job'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters:
-      - $ref: '#/components/parameters/DeploymentId'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ApplyRequest'
+        default:
+          $ref: '#/components/responses/Error'
   /jobs/{job_id}:
     get:
       operationId: getJob
-      summary: 비동기 작업 상태 및 결과 조회
-      x-required-permission: provision:read
+      summary: 진행 상태와 plan 또는 인프라 출력 조회
+      parameters:
+      - $ref: '#/components/parameters/JobId'
       responses:
         '200':
           description: Success
@@ -682,143 +96,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Job'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters:
-      - $ref: '#/components/parameters/JobId'
-  /deployments/{deployment_id}/handoff:
-    get:
-      operationId: getHandoff
-      summary: 후속 모듈에 인프라 결과 인계
-      x-required-permission: provision:handoff
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Handoff'
-        '400':
-          description: Malformed request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Permission denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Not found within caller scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Revision, idempotency, active job or lifecycle conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Schema or semantic validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Unexpected failure; use request ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      parameters:
-      - $ref: '#/components/parameters/DeploymentId'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     platformBearer:
       type: http
       scheme: bearer
-      description: Platform identity. Claims and every resource reference must be authorization-checked by the server.
+      description: Reuse platform auth; authorize migration/plan/job references and target execution on every request.
   parameters:
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema:
-        type: string
-        minLength: 8
-        maxLength: 128
-      description: Same principal+method+path+key and same body returns original result. Different body -> 409.
-    DeploymentId:
-      name: deployment_id
-      in: path
-      required: true
-      schema:
-        type: string
-        pattern: ^[a-zA-Z0-9_-]{3,100}$
-    JobId:
-      name: job_id
+    MigrationId:
+      name: migration_id
       in: path
       required: true
       schema:
@@ -831,21 +119,31 @@ components:
       schema:
         type: string
         pattern: ^[a-zA-Z0-9_-]{3,100}$
-    TemplateId:
-      name: template_id
+    JobId:
+      name: job_id
       in: path
       required: true
       schema:
         type: string
-        enum:
-        - aws-web
-        - gcp-web
-    TemplateVersion:
-      name: version
-      in: path
+        pattern: ^[a-zA-Z0-9_-]{3,100}$
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
       required: true
       schema:
         type: string
+        minLength: 8
+        maxLength: 128
+      description: PLAN/APPLY retries with the same key and body return the same job; changed body is 409. A plan executes
+        at most once even with a new key.
+  responses:
+    Error:
+      description: 400 malformed; 401 unauthenticated; 403 forbidden; 404 unknown reference; 409 stale/blocked/busy/idempotency
+        conflict; 422 invalid sizing; 429 limited; 500/503 unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
   schemas:
     AwsSizing:
       type: object
@@ -857,345 +155,37 @@ components:
           - t3.small
           - t3.medium
           - m6i.large
-          title: 앱 서버 사양
-          default: t3.small
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         compute_disk_gib:
           type: integer
           minimum: 20
           maximum: 200
-          title: 앱 디스크 용량 (GiB)
-          default: 30
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         db_instance_class:
           type: string
           enum:
           - db.t3.micro
           - db.t3.small
           - db.m6g.large
-          title: DB 사양
-          default: db.t3.micro
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         db_storage_gib:
           type: integer
           minimum: 20
           maximum: 200
-          title: DB 초기 용량 (GiB)
-          default: 20
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         db_max_storage_gib:
           type: integer
           minimum: 22
           maximum: 500
-          title: DB 자동 확장 상한 (GiB)
-          default: 100
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         db_multi_az:
           type: boolean
-          title: DB Multi-AZ
-          default: false
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         cache_node_type:
           type: string
           enum:
           - cache.t3.micro
           - cache.t3.small
           - cache.m6g.large
-          title: 캐시 노드 사양
-          default: cache.t3.micro
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         cache_node_count:
           type: integer
           minimum: 1
           maximum: 3
-          title: 캐시 노드 수
-          default: 1
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
-      required:
-      - compute_instance_type
-      - compute_disk_gib
-      - db_instance_class
-      - db_storage_gib
-      - db_max_storage_gib
-      - db_multi_az
-      - cache_node_type
-      - cache_node_count
-    AwsInputs:
-      type: object
-      additionalProperties: false
-      properties:
-        deployment_id:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 클라우드 자원 이름 접두사
-          pattern: ^[a-z][a-z0-9-]{2,19}$
-          description: Cloud-native deployment name. Immutable after draft creation.
-        metadata:
-          type: object
-          additionalProperties: false
-          properties:
-            project:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            environment:
-              type: string
-              enum:
-              - poc
-              - dev
-            owner:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            cost_center:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            workload:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            migration_id:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            data_class:
-              type: string
-              enum:
-              - public
-              - internal
-              - confidential
-            expires_on:
-              type: string
-              format: date
-          required:
-          - project
-          - environment
-          - owner
-          - cost_center
-          - workload
-          - migration_id
-          - data_class
-          - expires_on
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 소유권·비용 추적 정보
-        region:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 리전
-        account_id:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: AWS 계정
-          pattern: ^[0-9]{12}$
-        bucket_name:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 파일 저장소 이름
-          pattern: ^[a-z][a-z0-9-]{1,61}[a-z0-9]$
-        database_name:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 초기 DB 이름
-          pattern: ^[a-z][a-z0-9]{0,30}$
-        web_ingress_cidrs:
-          type: array
-          items:
-            type: string
-            description: IPv4 CIDR; host bits, overlap and subnet containment require semantic validation.
-          minItems: 1
-          uniqueItems: true
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-        web_ports:
-          type: array
-          items:
-            type: integer
-            enum:
-            - 80
-            - 443
-            - 8080
-          minItems: 1
-          uniqueItems: true
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-        admin_cidrs:
-          type: array
-          items:
-            type: string
-            description: IPv4 CIDR; host bits, overlap and subnet containment require semantic validation.
-          uniqueItems: true
-          description: /24~32 only. Empty by default.
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-        deletion_protection:
-          type: boolean
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-          title: DB 삭제 보호
-        final_snapshot_identifier:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 삭제 전 최종 스냅샷 이름
-        network:
-          type: object
-          additionalProperties: false
-          properties:
-            vpc_cidr:
-              type: string
-            public_subnet_cidr:
-              type: string
-            private_subnet_cidrs:
-              type: array
-              items:
-                type: string
-                description: IPv4 CIDR; host bits, overlap and subnet containment require semantic validation.
-              minItems: 2
-              maxItems: 2
-              uniqueItems: true
-            availability_zones:
-              type: array
-              items:
-                type: string
-              minItems: 2
-              maxItems: 2
-              uniqueItems: true
-          required:
-          - vpc_cidr
-          - public_subnet_cidr
-          - private_subnet_cidrs
-          - availability_zones
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-          title: 네트워크 구성
-        sizing:
-          $ref: '#/components/schemas/AwsSizing'
-        key_name:
-          type:
-          - string
-          - 'null'
-          description: Existing key pair; infra_admin only.
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-      required:
-      - deployment_id
-      - metadata
-      - region
-      - account_id
-      - bucket_name
-      - database_name
-      - web_ingress_cidrs
-      - web_ports
-      - admin_cidrs
-      - deletion_protection
-      - final_snapshot_identifier
-      - network
-      - sizing
-    AwsConfiguration:
-      type: object
-      additionalProperties: false
-      properties:
-        template_id:
-          const: aws-web
-        template_version:
-          const: v0.1
-        cloud_connection_id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        image_profile_id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        secret_bindings:
-          type: object
-          additionalProperties: false
-          properties:
-            redis_auth:
-              type: string
-              pattern: ^[a-zA-Z0-9_-]{3,100}$
-          required:
-          - redis_auth
-        inputs:
-          $ref: '#/components/schemas/AwsInputs'
-      required:
-      - template_id
-      - template_version
-      - cloud_connection_id
-      - image_profile_id
-      - secret_bindings
-      - inputs
+      required: []
     GcpSizing:
       type: object
       additionalProperties: false
@@ -1206,773 +196,122 @@ components:
           - e2-small
           - e2-medium
           - e2-standard-2
-          title: 앱 서버 사양
-          default: e2-small
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         compute_disk_gib:
           type: integer
           minimum: 20
           maximum: 200
-          title: 앱 디스크 용량 (GiB)
-          default: 30
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         db_tier:
           type: string
           enum:
           - db-custom-1-3840
           - db-custom-2-7680
           - db-custom-4-15360
-          title: DB 사양
-          default: db-custom-1-3840
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         db_storage_gib:
           type: integer
           minimum: 20
           maximum: 200
-          title: DB 초기 용량 (GiB)
-          default: 20
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         db_max_storage_gib:
           type: integer
           minimum: 22
           maximum: 500
-          title: DB 자동 확장 상한 (GiB)
-          default: 100
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         db_high_availability:
           type: boolean
-          title: DB 고가용성
-          default: false
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         cache_memory_gib:
           type: integer
           minimum: 1
           maximum: 16
-          title: 캐시 메모리 (GiB)
-          default: 1
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
         cache_high_availability:
           type: boolean
-          title: 캐시 고가용성
-          default: false
-          x-ui:
-            group: sizing
-            editable_by:
-            - editor
-            ai_recommendable: true
-      required:
-      - compute_machine_type
-      - compute_disk_gib
-      - db_tier
-      - db_storage_gib
-      - db_max_storage_gib
-      - db_high_availability
-      - cache_memory_gib
-      - cache_high_availability
-    GcpInputs:
-      type: object
-      additionalProperties: false
-      properties:
-        deployment_id:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 클라우드 자원 이름 접두사
-          pattern: ^[a-z][a-z0-9-]{2,19}$
-          description: Cloud-native deployment name. Immutable after draft creation.
-        metadata:
-          type: object
-          additionalProperties: false
-          properties:
-            project:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            environment:
-              type: string
-              enum:
-              - poc
-              - dev
-            owner:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            cost_center:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            workload:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            migration_id:
-              type: string
-              pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
-            data_class:
-              type: string
-              enum:
-              - public
-              - internal
-              - confidential
-            expires_on:
-              type: string
-              format: date
-          required:
-          - project
-          - environment
-          - owner
-          - cost_center
-          - workload
-          - migration_id
-          - data_class
-          - expires_on
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 소유권·비용 추적 정보
-        region:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 리전
-        zone:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 가용 영역
-        project_id:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: GCP 프로젝트
-        bucket_name:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 파일 저장소 이름
-          pattern: ^[a-z][a-z0-9-]{1,61}[a-z0-9]$
-        database_name:
-          type: string
-          x-ui:
-            group: platform
-            editable_by:
-            - editor
-            ai_recommendable: false
-          title: 초기 DB 이름
-          pattern: ^[a-z][a-z0-9]{0,30}$
-        web_ingress_cidrs:
-          type: array
-          items:
-            type: string
-            description: IPv4 CIDR; host bits, overlap and subnet containment require semantic validation.
-          minItems: 1
-          uniqueItems: true
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-        web_ports:
-          type: array
-          items:
-            type: integer
-            enum:
-            - 80
-            - 443
-            - 8080
-          minItems: 1
-          uniqueItems: true
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-        admin_cidrs:
-          type: array
-          items:
-            type: string
-            description: IPv4 CIDR; host bits, overlap and subnet containment require semantic validation.
-          uniqueItems: true
-          description: /24~32 only. Empty by default.
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-        deletion_protection:
-          type: boolean
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-          title: DB 삭제 보호
-        network:
-          type: object
-          additionalProperties: false
-          properties:
-            subnet_cidr:
-              type: string
-            service_range_address:
-              type: string
-            service_range_prefix:
-              type: integer
-              minimum: 16
-              maximum: 20
-          required:
-          - subnet_cidr
-          - service_range_address
-          - service_range_prefix
-          x-ui:
-            group: network-policy
-            editable_by:
-            - infra_admin
-            ai_recommendable: false
-          title: 네트워크 구성
-        sizing:
-          $ref: '#/components/schemas/GcpSizing'
-      required:
-      - deployment_id
-      - metadata
-      - region
-      - zone
-      - project_id
-      - bucket_name
-      - database_name
-      - web_ingress_cidrs
-      - web_ports
-      - admin_cidrs
-      - deletion_protection
-      - network
-      - sizing
-    GcpConfiguration:
-      type: object
-      additionalProperties: false
-      properties:
-        template_id:
-          const: gcp-web
-        template_version:
-          const: v0.1
-        cloud_connection_id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        image_profile_id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        secret_bindings:
-          type: object
-          additionalProperties: false
-          properties: {}
-          required: []
-        inputs:
-          $ref: '#/components/schemas/GcpInputs'
-      required:
-      - template_id
-      - template_version
-      - cloud_connection_id
-      - image_profile_id
-      - secret_bindings
-      - inputs
-    Configuration:
-      oneOf:
-      - $ref: '#/components/schemas/AwsConfiguration'
-      - $ref: '#/components/schemas/GcpConfiguration'
-    CreateDeployment:
-      type: object
-      additionalProperties: false
-      properties:
-        configuration:
-          $ref: '#/components/schemas/Configuration'
-      required:
-      - configuration
-    ReplaceConfiguration:
-      type: object
-      additionalProperties: false
-      properties:
-        expected_revision:
-          type: integer
-          minimum: 1
-        configuration:
-          $ref: '#/components/schemas/Configuration'
-      required:
-      - expected_revision
-      - configuration
-    Deployment:
+      required: []
+    Sizing:
+      description: Partial sizing only. Server validates the TARGET cloud and merged baseline. Omitted fields retain managed
+        values.
+      anyOf:
+      - $ref: '#/components/schemas/AwsSizing'
+      - $ref: '#/components/schemas/GcpSizing'
+    Environment:
       type: object
       additionalProperties: false
       properties:
         id:
           type: string
           pattern: ^[a-zA-Z0-9_-]{3,100}$
-        revision:
-          type: integer
-          minimum: 1
-        configuration:
-          $ref: '#/components/schemas/Configuration'
-        state:
-          type: string
-          enum:
-          - DRAFT
-          - PLANNING
-          - PLAN_READY
-          - APPLYING
-          - PROVISIONED
-          - FAILED
-          - NEEDS_RECONCILIATION
-        active_job_id:
-          type:
-          - string
-          - 'null'
-        latest_plan_id:
-          type:
-          - string
-          - 'null'
-        allowed_actions:
-          type: array
-          items:
-            type: string
-            enum:
-            - EDIT_CONFIGURATION
-            - REQUEST_RECOMMENDATION
-            - CREATE_PLAN
-            - APPROVE_APPLY
-            - READ_HANDOFF
-          uniqueItems: true
-      required:
-      - id
-      - revision
-      - configuration
-      - state
-      - active_job_id
-      - latest_plan_id
-      - allowed_actions
-    TemplateSummary:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: string
-          enum:
-          - aws-web
-          - gcp-web
-        version:
-          type: string
         cloud:
           type: string
           enum:
           - aws
           - gcp
-        title:
-          type: string
-        lifecycle:
-          type: string
-          enum:
-          - DRAFT
-          - APPROVED
-          - RETIRED
       required:
       - id
-      - version
       - cloud
-      - title
-      - lifecycle
-    TemplateList:
+    Context:
       type: object
       additionalProperties: false
       properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/TemplateSummary'
-      required:
-      - items
-    ImageProfile:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
+        migration_id:
           type: string
           pattern: ^[a-zA-Z0-9_-]{3,100}$
-        revision:
-          type: integer
-          minimum: 1
-        os:
-          type: string
-        architecture:
-          type: string
-          enum:
-          - x86_64
-        status:
-          type: string
-          enum:
-          - APPROVED
-          - UNAVAILABLE
-        container_runtime:
-          type: string
-          enum:
-          - INSTALLED
-          - NOT_INSTALLED
-          - UNVERIFIED
-      required:
-      - id
-      - revision
-      - os
-      - architecture
-      - status
-      - container_runtime
-    Template:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: string
-          enum:
-          - aws-web
-          - gcp-web
-        version:
-          type: string
-        cloud:
-          type: string
-          enum:
-          - aws
-          - gcp
-        lifecycle:
-          type: string
-          enum:
-          - DRAFT
-          - APPROVED
-          - RETIRED
-        input_schema:
+        source:
+          $ref: '#/components/schemas/Environment'
+        target:
+          $ref: '#/components/schemas/Environment'
+        target_sizing:
+          $ref: '#/components/schemas/Sizing'
+        sizing_schema:
           type: object
-          additionalProperties: true
-          description: Standalone JSON Schema 2020-12 for inputs, with x-ui annotations. No unresolved refs.
-        default_inputs:
-          oneOf:
-          - $ref: '#/components/schemas/AwsInputs'
-          - $ref: '#/components/schemas/GcpInputs'
-        image_profiles:
-          type: array
-          items:
-            $ref: '#/components/schemas/ImageProfile'
-        fixed_rules:
-          type: array
-          items:
-            type: string
-        limitations:
-          type: array
-          items:
-            type: string
+          description: Standalone JSON Schema for the target's editable fields, from the reviewed catalog.
       required:
-      - id
-      - version
-      - cloud
-      - lifecycle
-      - input_schema
-      - default_inputs
-      - image_profiles
-      - fixed_rules
-      - limitations
-    RevisionRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        expected_revision:
-          type: integer
-          minimum: 1
-      required:
-      - expected_revision
+      - migration_id
+      - source
+      - target
+      - target_sizing
+      - sizing_schema
     RecommendationRequest:
       type: object
       additionalProperties: false
       properties:
-        expected_revision:
-          type: integer
-          minimum: 1
         requirements:
           type: string
           minLength: 1
           maxLength: 4000
+        overrides:
+          $ref: '#/components/schemas/Sizing'
       required:
-      - expected_revision
       - requirements
-    SuggestedChange:
-      type: object
-      additionalProperties: false
-      properties:
-        field:
-          type: string
-          pattern: ^sizing\.[a-z_]+$
-        current_value:
-          type:
-          - string
-          - integer
-          - boolean
-        proposed_value:
-          type:
-          - string
-          - integer
-          - boolean
-        reason:
-          type: string
-          minLength: 1
-          maxLength: 2000
-      required:
-      - field
-      - current_value
-      - proposed_value
-      - reason
+      - overrides
     Recommendation:
       type: object
       additionalProperties: false
       properties:
-        id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        deployment_id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        based_on_revision:
-          type: integer
-          minimum: 1
-        status:
-          type: string
-          enum:
-          - PROPOSED
-          - NEEDS_INPUT
-        changes:
-          type: array
-          items:
-            $ref: '#/components/schemas/SuggestedChange'
+        parameters:
+          $ref: '#/components/schemas/Sizing'
+        rationale:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 2000
         questions:
           type: array
           items:
             type: string
-        limitations:
-          type: array
-          items:
-            type: string
-        created_at:
-          type: string
-          format: date-time
       required:
-      - id
-      - deployment_id
-      - based_on_revision
-      - status
-      - changes
+      - parameters
+      - rationale
       - questions
-      - limitations
-      - created_at
-    AcceptRecommendation:
+    PlanRequest:
       type: object
       additionalProperties: false
       properties:
-        expected_revision:
-          type: integer
-          minimum: 1
-        recommendation_id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        selected_fields:
-          type: array
-          items:
-            type: string
-            pattern: ^sizing\.[a-z_]+$
-          minItems: 1
-          uniqueItems: true
+        overrides:
+          $ref: '#/components/schemas/Sizing'
       required:
-      - expected_revision
-      - recommendation_id
-      - selected_fields
-    Issue:
-      type: object
-      additionalProperties: false
-      properties:
-        code:
-          type: string
-        field:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - field
-      - message
-    Error:
-      type: object
-      additionalProperties: false
-      properties:
-        code:
-          type: string
-          enum:
-          - UNAUTHENTICATED
-          - FORBIDDEN
-          - NOT_FOUND
-          - INVALID_INPUT
-          - REVISION_CONFLICT
-          - JOB_IN_PROGRESS
-          - PLAN_STALE
-          - PLAN_BLOCKED
-          - IDEMPOTENCY_CONFLICT
-          - RECONCILIATION_REQUIRED
-          - INVALID_STATE
-          - RATE_LIMITED
-          - INTERNAL_ERROR
-        message:
-          type: string
-        request_id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        issues:
-          type: array
-          items:
-            $ref: '#/components/schemas/Issue'
-      required:
-      - code
-      - message
-      - request_id
-      - issues
-    Job:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        deployment_id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        type:
-          type: string
-          enum:
-          - RECOMMEND
-          - PLAN
-          - APPLY
-        status:
-          type: string
-          enum:
-          - QUEUED
-          - RUNNING
-          - SUCCEEDED
-          - FAILED
-          - NEEDS_RECONCILIATION
-        phase:
-          type: string
-          enum:
-          - QUEUED
-          - VALIDATING
-          - RECOMMENDING
-          - INITIALIZING
-          - PLANNING
-          - APPLYING
-          - COLLECTING_OUTPUTS
-          - DONE
-        message:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        result:
-          oneOf:
-          - type: object
-            additionalProperties: false
-            properties:
-              kind:
-                const: recommendation
-              recommendation:
-                $ref: '#/components/schemas/Recommendation'
-            required:
-            - kind
-            - recommendation
-          - type: object
-            additionalProperties: false
-            properties:
-              kind:
-                const: plan
-              plan_id:
-                type: string
-                pattern: ^[a-zA-Z0-9_-]{3,100}$
-            required:
-            - kind
-            - plan_id
-          - type: object
-            additionalProperties: false
-            properties:
-              kind:
-                const: handoff
-              deployment_id:
-                type: string
-                pattern: ^[a-zA-Z0-9_-]{3,100}$
-            required:
-            - kind
-            - deployment_id
-          - type: 'null'
-        error:
-          oneOf:
-          - $ref: '#/components/schemas/Error'
-          - type: 'null'
-      required:
-      - id
-      - deployment_id
-      - type
-      - status
-      - phase
-      - message
-      - created_at
-      - updated_at
-      - result
-      - error
+      - overrides
     ResourceChange:
       type: object
       additionalProperties: false
       properties:
         address:
-          type: string
-        resource_type:
           type: string
         action:
           type: string
@@ -1984,10 +323,9 @@ components:
           - NO_OP
         summary:
           type: string
-          description: Redacted human-readable summary; never raw provider values.
+          description: Redacted change and interruption implications; never raw provider data.
       required:
       - address
-      - resource_type
       - action
       - summary
     Plan:
@@ -1997,32 +335,18 @@ components:
         id:
           type: string
           pattern: ^[a-zA-Z0-9_-]{3,100}$
-        deployment_id:
+        migration_id:
           type: string
           pattern: ^[a-zA-Z0-9_-]{3,100}$
-        config_revision:
-          type: integer
-          minimum: 1
-        template_version:
-          type: string
+        target:
+          $ref: '#/components/schemas/Environment'
         status:
           type: string
           enum:
           - REVIEWABLE
           - BLOCKED
-          - STALE
-          - APPLIED
-        review_digest:
-          type: string
-          pattern: ^sha256:[0-9a-f]{64}$
-        target_summary:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        expires_at:
-          type: string
-          format: date-time
+        effective_sizing:
+          $ref: '#/components/schemas/Sizing'
         changes:
           type: array
           items:
@@ -2034,337 +358,128 @@ components:
         blockers:
           type: array
           items:
-            $ref: '#/components/schemas/Issue'
-        cost_estimate:
-          type: object
-          additionalProperties: false
-          properties:
-            status:
-              const: NOT_AVAILABLE
-            message:
-              type: string
-          required:
-          - status
-          - message
-        approved_by:
-          type:
-          - string
-          - 'null'
-        approved_at:
-          type:
-          - string
-          - 'null'
+            type: string
+        expires_at:
+          type: string
           format: date-time
       required:
       - id
-      - deployment_id
-      - config_revision
-      - template_version
+      - migration_id
+      - target
       - status
-      - review_digest
-      - target_summary
-      - created_at
-      - expires_at
+      - effective_sizing
       - changes
       - warnings
       - blockers
-      - cost_estimate
-      - approved_by
-      - approved_at
-    ApplyRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        expected_revision:
-          type: integer
-          minimum: 1
-        plan_id:
-          type: string
-          pattern: ^[a-zA-Z0-9_-]{3,100}$
-        review_digest:
-          type: string
-          pattern: ^sha256:[0-9a-f]{64}$
-      required:
-      - expected_revision
-      - plan_id
-      - review_digest
-    AwsHandoff:
-      type: object
-      additionalProperties: false
-      properties:
-        schema_version:
-          const: 1
-        cloud:
-          const: aws
-        deployment_id:
-          type: string
-        metadata:
-          type: object
-          additionalProperties:
-            type: string
-        compute:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            public_ip:
-              type: string
-            private_ip:
-              type: string
-            identity:
-              type: string
-          required:
-          - id
-          - public_ip
-          - private_ip
-          - identity
-        database:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            host:
-              type: string
-            port:
-              const: 5432
-            name:
-              type: string
-            tls_required:
-              const: true
-            admin_secret_ref:
-              type: string
-              description: Reference only; no secret material.
-          required:
-          - id
-          - host
-          - port
-          - name
-          - tls_required
-          - admin_secret_ref
-        cache:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            host:
-              type: string
-            port:
-              type: integer
-              minimum: 1
-              maximum: 65535
-            tls_required:
-              const: true
-            auth_source:
-              type: string
-          required:
-          - id
-          - host
-          - port
-          - tls_required
-          - auth_source
-        storage:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            name:
-              type: string
-          required:
-          - id
-          - name
-        network:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            app_security_group_id:
-              type: string
-          required:
-          - id
-          - app_security_group_id
-        pending_checks:
-          type: array
-          items:
-            type: string
-      required:
-      - schema_version
-      - cloud
-      - deployment_id
-      - metadata
-      - compute
-      - database
-      - cache
-      - storage
-      - network
-      - pending_checks
-    GcpHandoff:
-      type: object
-      additionalProperties: false
-      properties:
-        schema_version:
-          const: 1
-        cloud:
-          const: gcp
-        deployment_id:
-          type: string
-        metadata:
-          type: object
-          additionalProperties:
-            type: string
-        compute:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            public_ip:
-              type: string
-            private_ip:
-              type: string
-            identity:
-              type: string
-          required:
-          - id
-          - public_ip
-          - private_ip
-          - identity
-        database:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            host:
-              type: string
-            port:
-              const: 5432
-            name:
-              type: string
-            tls_required:
-              const: true
-            connection_name:
-              type: string
-            app_db_user:
-              type: string
-            auth_mode:
-              const: cloud-sql-iam-connector
-          required:
-          - id
-          - host
-          - port
-          - name
-          - tls_required
-          - connection_name
-          - app_db_user
-          - auth_mode
-        cache:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            host:
-              type: string
-            port:
-              type: integer
-              minimum: 1
-              maximum: 65535
-            tls_required:
-              const: true
-            auth_source:
-              type: string
-            server_ca_certs:
-              type: array
-              items:
-                type: object
-                additionalProperties: false
-                properties:
-                  cert:
-                    type: string
-                  create_time:
-                    type: string
-                  expire_time:
-                    type: string
-                  serial_number:
-                    type: string
-                  sha1_fingerprint:
-                    type: string
-                required:
-                - cert
-                - create_time
-                - expire_time
-                - serial_number
-                - sha1_fingerprint
-          required:
-          - id
-          - host
-          - port
-          - tls_required
-          - auth_source
-          - server_ca_certs
-        storage:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            name:
-              type: string
-          required:
-          - id
-          - name
-        network:
-          type: object
-          additionalProperties: false
-          properties:
-            id:
-              type: string
-            subnetwork_id:
-              type: string
-          required:
-          - id
-          - subnetwork_id
-        pending_checks:
-          type: array
-          items:
-            type: string
-      required:
-      - schema_version
-      - cloud
-      - deployment_id
-      - metadata
-      - compute
-      - database
-      - cache
-      - storage
-      - network
-      - pending_checks
+      - expires_at
     Handoff:
       type: object
       additionalProperties: false
       properties:
-        deployment_id:
+        migration_id:
           type: string
           pattern: ^[a-zA-Z0-9_-]{3,100}$
-        applied_revision:
-          type: integer
-          minimum: 1
+        target:
+          $ref: '#/components/schemas/Environment'
         readiness:
-          const: RESOURCES_CREATED
-        container_runtime:
-          const: NOT_CHECKED
-        handoff:
-          oneOf:
-          - $ref: '#/components/schemas/AwsHandoff'
-          - $ref: '#/components/schemas/GcpHandoff'
+          const: INFRA_APPLIED
+        outputs:
+          type: object
+          additionalProperties: false
+          description: 'Only terraform output -json handoff (schema_version 1). Native fields: docs/platform-contract.md and
+            root outputs.tf. Never full state, plan or credentials.'
+          required:
+          - schema_version
+          - cloud
+          - deployment_id
+          - compute
+          - database
+          - cache
+          - storage
+          - network
+          - metadata
+          - pending_checks
+          properties:
+            schema_version:
+              const: 1
+            cloud:
+              type: string
+              enum:
+              - aws
+              - gcp
+            deployment_id:
+              type: string
+            compute:
+              type: object
+            database:
+              type: object
+            cache:
+              type: object
+            storage:
+              type: object
+            network:
+              type: object
+            metadata:
+              type: object
+            pending_checks:
+              type: array
+              items:
+                type: string
       required:
-      - deployment_id
-      - applied_revision
+      - migration_id
+      - target
       - readiness
-      - container_runtime
-      - handoff
+      - outputs
+    Error:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - message
+    Job:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: ^[a-zA-Z0-9_-]{3,100}$
+        migration_id:
+          type: string
+          pattern: ^[a-zA-Z0-9_-]{3,100}$
+        type:
+          type: string
+          enum:
+          - PLAN
+          - APPLY
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - NEEDS_RECONCILIATION
+        message:
+          type: string
+        result:
+          oneOf:
+          - $ref: '#/components/schemas/Plan'
+          - $ref: '#/components/schemas/Handoff'
+          - type: 'null'
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/Error'
+          - type: 'null'
+      required:
+      - id
+      - migration_id
+      - type
+      - status
+      - message
+      - result
+      - error

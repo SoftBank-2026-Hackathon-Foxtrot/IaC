@@ -1,23 +1,25 @@
 # 플랫폼 입출력과 시각화 계약
 
-UI·백엔드·실행 조정기 사이의 호출/상태/승인 계약은 [프로비저닝 인터페이스 v0.1](provisioning-interface.md)과 [OpenAPI](../contracts/provisioning.openapi.yaml)를 참고합니다. 이 문서는 Terraform 입력과 메타데이터의 의미를 설명합니다.
+UI·백엔드·실행 조정기 사이의 호출 계약은 [프로비저닝 인터페이스 v0.2](provisioning-interface.md)와 [OpenAPI](../contracts/provisioning.openapi.yaml)를 참고합니다. 양쪽 환경의 코드·설정·state는 플랫폼이 이미 관리하며, 이 문서는 그 내부 Terraform 입력과 메타데이터의 의미를 설명합니다.
 
 ## 입력을 둘로 분리
 
-**사람/플랫폼:** 계정·프로젝트, 리전/AZ, 네트워크 CIDR, 웹/관리 접근 범위, image/엔진 버전, bucket 이름, 삭제 보호, 메타데이터.
+**이미 관리되는 baseline:** 계정·프로젝트, 리전/AZ, 네트워크 CIDR, 웹/관리 접근 범위, image/엔진 버전, bucket 이름, 삭제 보호, 메타데이터. 환경 준비 때 확정한 값으로, 마이그레이션 UI에서 다시 입력하지 않습니다.
 
-**AI 추천 가능:** `catalog/sizing-policy.json`에 등록된 `sizing` 필드만. 서버 사양·디스크, DB 사양·디스크·HA, 캐시 사양·HA. 이것은 초기 검토 후보 목록이며 실시간 추천 모델이나 가격표가 아닙니다.
+**UI 조정·AI 추천 가능:** `catalog/sizing-policy.json`에 등록된 대상 `sizing` 필드만. 서버 사양·디스크, DB 사양·디스크·HA, 캐시 사양·HA. 이것은 초기 검토 후보 목록이며 실시간 추천 모델이나 가격표가 아닙니다.
 
 ```text
-human baseline ─┐
-                ├─ allowlist/형식/범위/CIDR 검사 → proposal.tfvars.json
-AI proposal ────┘                                  ↓
+managed target baseline ─┐
+                         ├─ 허용 필드·병합 후 검사 → 대상 tfvars
+UI overrides / AI 제안 ──┘                           ↓
                                                plan + diff
                                                    ↓
                                           사람이 검토한 saved plan
 ```
 
 `render_inputs.py`는 Terraform 코드나 shell 명령을 받지 않으며 실행하지 않습니다. 알 수 없는 키, 다른 cloud, 타입 불일치, 과도한 용량, 설명 없는 제안은 거부합니다. 부분 추천은 기존 sizing에 병합하므로 다른 필드가 기본값으로 초기화되지 않습니다. 입력 baseline에는 모든 sizing 필드를 명시합니다.
+
+UI의 최종 선택은 `merge_overrides(target_cloud, baseline, overrides)`로 처리합니다. 빈 overrides는 대상 설정을 그대로 유지합니다. AI 제안용 `merge_recommendation`은 이유까지 검사한 뒤 같은 병합 함수를 사용합니다. 원본의 값으로 대상을 덮어쓰지 않습니다.
 
 새 인스턴스 타입은 AI가 임의로 사용하지 못합니다. 담당자가 카탈로그와 Terraform validation을 함께 수정하고 테스트해야 합니다. AI가 빈약한 근거로 HA를 끄거나 사양을 줄이는 제안을 해도 자동 승인하지 않습니다. 승인 화면은 변경 전후와 rationale를 표시해야 합니다.
 
@@ -69,6 +71,8 @@ AWS 비용 할당 태그는 Billing에서 활성화해야 하며, GCP도 Billing
 ## 출력
 
 각 root는 `terraform output -json handoff`로 schema_version 1 객체를 제공합니다.
+
+v0.2 HTTP 계약은 APPLY 완료 job의 result에 `{migration_id, target, readiness: "INFRA_APPLIED", outputs: <이 객체>}`를 담습니다. 별도 handoff 조회 API는 없습니다. 앱/DB 준비 상태는 `pending_checks`를 확인해야 합니다.
 
 - 공통: cloud, deployment_id, metadata, compute/database/cache/storage/network, pending_checks.
 - AWS DB: master secret **ARN 참조**. 비밀 문자열을 출력하지 않습니다.
