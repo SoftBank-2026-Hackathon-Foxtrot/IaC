@@ -18,6 +18,24 @@ class InputsTest(unittest.TestCase):
     def proposal(self, params, cloud="aws"):
         return {"cloud": cloud, "parameters": params, "rationale": {k: "Observed workload requirement" for k in params}}
 
+    def test_management_baseline_is_preserved_and_not_ai_editable(self):
+        for cloud in ("aws", "gcp"):
+            base = self.base(cloud)
+            base.update(proxy_cidrs=["100.64.0.10/32"], enable_cloudflare_tunnel=True)
+            if cloud == "aws":
+                base["migration_source_cidrs"] = ["10.20.10.5/32"]
+            inputs.validate_config(cloud, base)
+            result = inputs.merge_overrides(cloud, base, {"compute_disk_gib": 40})
+            self.assertEqual(result["proxy_cidrs"], base["proxy_cidrs"])
+            for key in ("proxy_cidrs", "migration_source_cidrs", "enable_cloudflare_tunnel"):
+                with self.assertRaises(ValueError):
+                    inputs.merge_overrides(cloud, base, {key: True})
+            for cidr in ("0.0.0.0/0", "8.8.8.8/32", "10.0.0.0/8", "::/0"):
+                bad = copy.deepcopy(base)
+                bad["proxy_cidrs"] = [cidr]
+                with self.assertRaises(ValueError):
+                    inputs.validate_config(cloud, bad)
+
     def test_examples_and_partial_merge_preserve_human_settings(self):
         for cloud in ("aws", "gcp"):
             with self.subTest(cloud=cloud):

@@ -32,6 +32,7 @@ AI 추천 API/모델 호출, 사용자 승인 UI, apply 실행기, 실제 비용
 
 ## 먼저 볼 파일
 
+- [치이카와 LIVE PoC 연결](docs/demo-deployment.md) — Redis 이전 설정, 관리망 입력, DB 초기 권한과 WebSocket
 - [구조·선택 이유·네트워크 구성도](docs/design.md)
 - [UI·실행 조정기 연동 인터페이스](docs/provisioning-interface.md) — 관리 중인 환경 전제, API 5개, 입출력·담당
 - [OpenAPI 초안](contracts/provisioning.openapi.yaml) · [요청/응답 예시](contracts/examples/index.json) — 서버 미구현

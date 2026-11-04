@@ -60,3 +60,36 @@ resource "google_compute_firewall" "deny_other_egress" {
   deny { protocol = "all" }
   description = jsonencode(var.labels)
 }
+
+resource "google_compute_firewall" "proxy" {
+  count                   = length(var.proxy_cidrs) > 0 ? 1 : 0
+  name                    = "${var.name}-proxy-out"
+  network                 = var.network_id
+  direction               = "EGRESS"
+  priority                = 1000
+  destination_ranges      = var.proxy_cidrs
+  target_service_accounts = [var.app_service_account]
+  allow {
+    protocol = "tcp"
+    ports    = ["6379", "6432"]
+  }
+  description = jsonencode(var.labels)
+}
+resource "google_compute_firewall" "cloudflare_tunnel" {
+  count                   = var.enable_cloudflare_tunnel ? 1 : 0
+  name                    = "${var.name}-tunnel-out"
+  network                 = var.network_id
+  direction               = "EGRESS"
+  priority                = 1000
+  destination_ranges      = ["0.0.0.0/0"]
+  target_service_accounts = [var.app_service_account]
+  allow {
+    protocol = "tcp"
+    ports    = ["7844"]
+  }
+  allow {
+    protocol = "udp"
+    ports    = ["7844"]
+  }
+  description = jsonencode(var.labels)
+}

@@ -29,15 +29,17 @@ module "iam" {
   depends_on  = [google_project_service.required]
 }
 module "firewall" {
-  source              = "../../modules/gcp/firewall"
-  name                = var.deployment_id
-  labels              = merge(module.metadata.common, { component = "network" })
-  network_id          = module.network.network_id
-  app_service_account = module.iam.service_account_email
-  web_ingress_cidrs   = var.web_ingress_cidrs
-  web_ports           = var.web_ports
-  admin_cidrs         = var.admin_cidrs
-  service_cidr        = "${var.network.service_range_address}/${var.network.service_range_prefix}"
+  source                   = "../../modules/gcp/firewall"
+  name                     = var.deployment_id
+  labels                   = merge(module.metadata.common, { component = "network" })
+  network_id               = module.network.network_id
+  app_service_account      = module.iam.service_account_email
+  web_ingress_cidrs        = var.web_ingress_cidrs
+  web_ports                = var.web_ports
+  admin_cidrs              = var.admin_cidrs
+  proxy_cidrs              = var.proxy_cidrs
+  enable_cloudflare_tunnel = var.enable_cloudflare_tunnel
+  service_cidr             = "${var.network.service_range_address}/${var.network.service_range_prefix}"
 }
 module "compute" {
   source                = "../../modules/gcp/compute"

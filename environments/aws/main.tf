@@ -13,13 +13,16 @@ module "vpc" {
   availability_zones   = var.network.availability_zones
 }
 module "security_groups" {
-  source            = "../../modules/aws/security_groups"
-  name              = var.deployment_id
-  tags              = merge(module.metadata.common, { component = "network" })
-  vpc_id            = module.vpc.vpc_id
-  web_ingress_cidrs = var.web_ingress_cidrs
-  web_ports         = var.web_ports
-  admin_cidrs       = var.admin_cidrs
+  source                   = "../../modules/aws/security_groups"
+  name                     = var.deployment_id
+  tags                     = merge(module.metadata.common, { component = "network" })
+  vpc_id                   = module.vpc.vpc_id
+  web_ingress_cidrs        = var.web_ingress_cidrs
+  web_ports                = var.web_ports
+  admin_cidrs              = var.admin_cidrs
+  proxy_cidrs              = var.proxy_cidrs
+  enable_cloudflare_tunnel = var.enable_cloudflare_tunnel
+  migration_source_cidrs   = var.migration_source_cidrs
 }
 module "s3" {
   source      = "../../modules/aws/s3"

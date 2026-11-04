@@ -156,4 +156,62 @@ run "cache_requires_auth_and_tls" {
     condition     = aws_elasticache_replication_group.this.automatic_failover_enabled && aws_elasticache_replication_group.this.multi_az_enabled
     error_message = "Multiple nodes must enable failover."
   }
+  assert {
+    condition     = { for p in aws_elasticache_parameter_group.migration.parameter : p.name => p.value } == { "notify-keyspace-events" = "KEA", "maxmemory-policy" = "noeviction" } && aws_elasticache_replication_group.this.parameter_group_name == aws_elasticache_parameter_group.migration.name
+    error_message = "Migration requires attached keyspace notifications and noeviction."
+  }
+
+}
+
+run "management_enabled" {
+  command = plan
+  module { source = "../../modules/aws/security_groups" }
+  variables {
+    name                     = "test-poc"
+    web_ingress_cidrs        = ["0.0.0.0/0"]
+    web_ports                = [80, 443]
+    admin_cidrs              = []
+    tags                     = {}
+    vpc_id                   = "vpc-123"
+    proxy_cidrs              = ["10.50.0.10/32"]
+    enable_cloudflare_tunnel = true
+    migration_source_cidrs   = ["10.20.10.5/32"]
+  }
+  assert {
+    condition     = length(aws_vpc_security_group_egress_rule.proxy) == 2 && aws_vpc_security_group_egress_rule.proxy["10.50.0.10/32:6432"].to_port == 6432 && aws_vpc_security_group_ingress_rule.migration_db["10.20.10.5/32"].from_port == 5432 && aws_vpc_security_group_ingress_rule.migration_cache["10.20.10.5/32"].to_port == 6379 && length(aws_vpc_security_group_egress_rule.cloudflare_tunnel) == 2
+    error_message = "Management paths must be explicit, port-scoped and opt-in."
+  }
+}
+
+run "management_default_closed" {
+  command = plan
+  module { source = "../../modules/aws/security_groups" }
+  variables {
+    name              = "test-poc"
+    web_ingress_cidrs = ["0.0.0.0/0"]
+    web_ports         = [80, 443]
+    admin_cidrs       = []
+    tags              = {}
+    vpc_id            = "vpc-123"
+  }
+  assert {
+    condition     = length(aws_vpc_security_group_egress_rule.proxy) == 0 && length(aws_vpc_security_group_ingress_rule.migration_db) == 0 && length(aws_vpc_security_group_ingress_rule.migration_cache) == 0 && length(aws_vpc_security_group_egress_rule.cloudflare_tunnel) == 0
+    error_message = "Management paths must be explicit, port-scoped and opt-in."
+  }
+}
+
+run "management_reject_public" {
+  command = plan
+  module { source = "../../modules/aws/security_groups" }
+  variables {
+    name                     = "test-poc"
+    web_ingress_cidrs        = ["0.0.0.0/0"]
+    web_ports                = [80, 443]
+    admin_cidrs              = []
+    tags                     = {}
+    vpc_id                   = "vpc-123"
+    proxy_cidrs              = ["0.0.0.0/0"]
+    enable_cloudflare_tunnel = true
+  }
+  expect_failures = [var.proxy_cidrs]
 }

@@ -144,4 +144,67 @@ run "cache_requires_auth_and_tls" {
     condition     = google_redis_instance.this.auth_enabled && google_redis_instance.this.transit_encryption_mode == "SERVER_AUTHENTICATION"
     error_message = "Memorystore requires AUTH and TLS."
   }
+  assert {
+    condition     = google_redis_instance.this.redis_configs == tomap({ "notify-keyspace-events" = "KEA", "maxmemory-policy" = "noeviction" })
+    error_message = "Migration requires keyspace notifications and noeviction."
+  }
+
+}
+
+run "management_enabled" {
+  command = plan
+  module { source = "../../modules/gcp/firewall" }
+  variables {
+    name                     = "test-poc"
+    web_ingress_cidrs        = ["0.0.0.0/0"]
+    web_ports                = [80, 443]
+    admin_cidrs              = []
+    labels                   = {}
+    network_id               = "test-network"
+    app_service_account      = "app@test.iam.gserviceaccount.com"
+    service_cidr             = "10.31.0.0/16"
+    proxy_cidrs              = ["10.50.0.10/32"]
+    enable_cloudflare_tunnel = true
+  }
+  assert {
+    condition     = google_compute_firewall.proxy[0].destination_ranges == toset(["10.50.0.10/32"]) && one(google_compute_firewall.proxy[0].allow).ports == tolist(["6379", "6432"]) && google_compute_firewall.proxy[0].priority < google_compute_firewall.deny_other_egress.priority && length(google_compute_firewall.cloudflare_tunnel[0].allow) == 2
+    error_message = "Management paths must be explicit, port-scoped and opt-in."
+  }
+}
+
+run "management_default_closed" {
+  command = plan
+  module { source = "../../modules/gcp/firewall" }
+  variables {
+    name                = "test-poc"
+    web_ingress_cidrs   = ["0.0.0.0/0"]
+    web_ports           = [80, 443]
+    admin_cidrs         = []
+    labels              = {}
+    network_id          = "test-network"
+    app_service_account = "app@test.iam.gserviceaccount.com"
+    service_cidr        = "10.31.0.0/16"
+  }
+  assert {
+    condition     = length(google_compute_firewall.proxy) == 0 && length(google_compute_firewall.cloudflare_tunnel) == 0
+    error_message = "Management paths must be explicit, port-scoped and opt-in."
+  }
+}
+
+run "management_reject_public" {
+  command = plan
+  module { source = "../../modules/gcp/firewall" }
+  variables {
+    name                     = "test-poc"
+    web_ingress_cidrs        = ["0.0.0.0/0"]
+    web_ports                = [80, 443]
+    admin_cidrs              = []
+    labels                   = {}
+    network_id               = "test-network"
+    app_service_account      = "app@test.iam.gserviceaccount.com"
+    service_cidr             = "10.31.0.0/16"
+    proxy_cidrs              = ["0.0.0.0/0"]
+    enable_cloudflare_tunnel = true
+  }
+  expect_failures = [var.proxy_cidrs]
 }

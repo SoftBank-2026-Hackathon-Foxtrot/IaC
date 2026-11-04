@@ -12,12 +12,25 @@ resource "aws_elasticache_subnet_group" "this" {
   subnet_ids = var.subnet_ids
   tags       = var.tags
 }
+resource "aws_elasticache_parameter_group" "migration" {
+  name   = "${var.name}-migration"
+  family = "redis7"
+  parameter {
+    name  = "notify-keyspace-events"
+    value = "KEA"
+  }
+  parameter {
+    name  = "maxmemory-policy"
+    value = "noeviction"
+  }
+  tags = var.tags
+}
 resource "aws_elasticache_replication_group" "this" {
   replication_group_id       = var.name
   description                = "${var.name} application cache"
   engine                     = "redis"
   engine_version             = "7.1"
-  parameter_group_name       = "default.redis7"
+  parameter_group_name       = aws_elasticache_parameter_group.migration.name
   node_type                  = var.node_type
   num_cache_clusters         = var.node_count
   automatic_failover_enabled = var.node_count > 1

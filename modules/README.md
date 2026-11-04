@@ -22,6 +22,8 @@
 
 ## 확장 원칙
 
+관리망 연결은 root의 `proxy_cidrs`와 AWS `migration_source_cidrs`로 지정합니다. `enable_cloudflare_tunnel`은 outbound 7844만 추가합니다. 상세 의미와 기존 라우팅 전제는 [demo 배포 연결](../docs/demo-deployment.md)을 따릅니다. Redis 모듈은 이전에 필요한 KEA 알림과 noeviction을 고정합니다.
+
 1. 새로운 사양 후보: `catalog/sizing-policy.json`과 root의 sizing validation을 함께 수정합니다.
 2. 새로운 네트워크 경로/권한: 사람의 구성 변경으로 검토합니다. AI JSON에 임의 HCL/IAM/user-data 필드를 추가하지 않습니다.
 3. 다른 workload: 기존 모듈을 조합하는 별도 root를 만들고 별도 state를 사용합니다.

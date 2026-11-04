@@ -78,6 +78,8 @@ GCP Cloud SQL 역할은 현재 프로젝트 범위입니다. 이 초안은 전�
 
 ## 데이터와 초기 설정
 
+치이카와 LIVE의 추가 연결 조건은 [demo 배포 연결](demo-deployment.md)에 있습니다. 양쪽 Redis에는 이전기가 요구하는 keyspace 알림과 noeviction을 설정합니다. 기본 앱 접근 외 관리 프록시/이전기 경로는 명시한 사설 CIDR에만 추가합니다.
+
 - RDS: DB 인스턴스·초기 DB·TLS parameter group, AWS가 관리하는 master secret 참조. 앱용 제한 계정과 비밀 전달은 후속 bootstrap 담당.
 - Cloud SQL: DB 인스턴스·초기 DB·앱 IAM DB 사용자. 앱은 private IP 모드의 connector/proxy와 IAM 인증을 설정해야 하며 SQL GRANT는 후속 bootstrap 담당.
 - Redis: 인증·TLS 자원만 준비. AWS token은 별도 secret injection, GCP AUTH는 허가된 bootstrap 주체가 조회·전달. 앱 role에 master/admin 권한을 자동 추가하지 않음.

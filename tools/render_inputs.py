@@ -68,9 +68,19 @@ def validate_config(cloud, config):
     extras = {"aws": {"account_id", "ami_id", "key_name", "postgres_version", "final_snapshot_identifier"},
               "gcp": {"project_id", "zone", "image"}}
     require(cloud in extras, "Unsupported cloud")
-    require(not (config.keys() - common - extras[cloud]), "Unknown baseline key; keep secrets outside JSON")
+    optional = {"proxy_cidrs", "enable_cloudflare_tunnel"} | ({"migration_source_cidrs"} if cloud == "aws" else set())
+    require(not (config.keys() - common - extras[cloud] - optional), "Unknown baseline key; keep secrets outside JSON")
     required = common | ({"account_id", "final_snapshot_identifier"} if cloud == "aws" else {"project_id", "zone"})
     require(required <= config.keys(), "Missing required human-owned deployment settings")
+    for field in ("proxy_cidrs", "migration_source_cidrs"):
+        if field in config:
+            require(type(config[field]) is list, f"{field}: expected a list")
+            allowed = [ipaddress.ip_network(c) for c in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10")]
+            for cidr in config[field]:
+                n = ipv4(cidr)
+                require(n.prefixlen >= 24 and any(n.subnet_of(a) for a in allowed),
+                        f"{field}: use private or Tailscale IPv4 /24 through /32")
+    require(type(config.get("enable_cloudflare_tunnel", False)) is bool, "enable_cloudflare_tunnel: expected boolean")
     validate_sizing(cloud, config["sizing"])
     require(config["web_ports"] and all(type(p) is int and p in (80, 443, 8080) for p in config["web_ports"]),
             "Only reviewed public application ports are allowed")
