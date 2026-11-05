@@ -24,14 +24,6 @@
     "schema": "Handoff"
   },
   {
-    "file": "examples/recommendation-request.json",
-    "schema": "RecommendationRequest"
-  },
-  {
-    "file": "examples/recommendation-response.json",
-    "schema": "Recommendation"
-  },
-  {
     "file": "examples/plan-job-response.json",
     "schema": "Job"
   },

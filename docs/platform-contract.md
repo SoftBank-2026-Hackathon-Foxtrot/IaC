@@ -1,6 +1,6 @@
 # 플랫폼 입출력과 시각화 계약
 
-UI·백엔드·실행 조정기 사이의 호출 계약은 [프로비저닝 인터페이스 v0.2](provisioning-interface.md)와 [OpenAPI](../contracts/provisioning.openapi.yaml)를 참고합니다. 양쪽 환경의 코드·설정·state는 플랫폼이 이미 관리하며, 이 문서는 그 내부 Terraform 입력과 메타데이터의 의미를 설명합니다.
+UI·백엔드·실행 조정기 사이의 호출 계약은 [프로비저닝 인터페이스 v0.3](provisioning-interface.md)와 [OpenAPI](../contracts/provisioning.openapi.yaml)를 참고합니다. 양쪽 환경의 코드·설정·state는 플랫폼이 이미 관리하며, 이 문서는 그 내부 Terraform 입력과 메타데이터의 의미를 설명합니다.
 
 ## 입력을 둘로 분리
 
@@ -72,7 +72,7 @@ AWS 비용 할당 태그는 Billing에서 활성화해야 하며, GCP도 Billing
 
 각 root는 `terraform output -json handoff`로 schema_version 1 객체를 제공합니다.
 
-v0.2 HTTP 계약은 APPLY 완료 job의 result에 `{migration_id, target, readiness: "INFRA_APPLIED", outputs: <이 객체>}`를 담습니다. 별도 handoff 조회 API는 없습니다. 앱/DB 준비 상태는 `pending_checks`를 확인해야 합니다.
+v0.3 HTTP 계약은 APPLY 완료 job의 result에 `{migration_id, target, readiness: "INFRA_APPLIED", outputs: <이 객체>}`를 담습니다. 별도 handoff 조회 API는 없습니다. 앱/DB 준비 상태는 `pending_checks`를 확인해야 합니다.
 
 - 공통: cloud, deployment_id, metadata, compute/database/cache/storage/network, pending_checks.
 - AWS DB: master secret **ARN 참조**. 비밀 문자열을 출력하지 않습니다.

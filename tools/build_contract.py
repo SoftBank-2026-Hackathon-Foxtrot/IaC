@@ -50,14 +50,6 @@ def make_artifacts():
         "target_sizing": ref("Sizing"),
         "sizing_schema": {"type": "object", "description": "Standalone JSON Schema for the target's editable fields, from the reviewed catalog."},
     })
-    schemas["RecommendationRequest"] = obj({
-        "requirements": string(minLength=1, maxLength=4000), "overrides": ref("Sizing"),
-    })
-    schemas["Recommendation"] = obj({
-        "parameters": ref("Sizing"),
-        "rationale": {"type": "object", "additionalProperties": string(minLength=1, maxLength=2000)},
-        "questions": array(string()),
-    })
     schemas["PlanRequest"] = obj({"overrides": ref("Sizing")})
     schemas["ResourceChange"] = obj({
         "address": string(), "action": string(enum=["CREATE", "UPDATE", "DELETE", "REPLACE", "NO_OP"]),
@@ -110,13 +102,12 @@ def make_artifacts():
 
     paths = {
         "/migrations/{migration_id}": {"get": operation("getProvisioningContext", "관리 중인 원본·대상과 조정 가능한 사양 조회", "Context", "MigrationId")},
-        "/migrations/{migration_id}/recommendations": {"post": operation("recommendSizing", "대상 사양 추천; 저장·적용하지 않음", "Recommendation", "MigrationId", "RecommendationRequest")},
         "/migrations/{migration_id}/plans": {"post": operation("createPlan", "대상 baseline에 변경값을 병합해 plan 생성", "Job", "MigrationId", "PlanRequest", True)},
         "/plans/{plan_id}/apply": {"post": operation("applyPlan", "검토한 불변 saved plan 실행; 요청 본문 없음", "Job", "PlanId", async_job=True)},
         "/jobs/{job_id}": {"get": operation("getJob", "진행 상태와 plan 또는 인프라 출력 조회", "Job", "JobId")},
     }
     spec = {
-        "openapi": "3.1.0", "info": {"title": "Foxtrot Managed Provisioning — DRAFT", "version": "0.2.0",
+        "openapi": "3.1.0", "info": {"title": "Foxtrot Managed Provisioning — DRAFT", "version": "0.3.0",
             "description": "Source and target code, baseline, state and credentials are already managed by the platform. Only target sizing can change. Specification only; no API or runner implemented. See docs/provisioning-interface.md."},
         "servers": [{"url": "/api/v1/provisioning"}], "security": [{"platformBearer": []}], "paths": paths,
         "components": {
@@ -164,8 +155,6 @@ def make_artifacts():
             native["pending_checks"].append("cache-auth-delivery")
         example(f"{cloud}-handoff-response", "Handoff", {"migration_id": migration_id, "target": target, "readiness": "INFRA_APPLIED", "outputs": native})
 
-    example("recommendation-request", "RecommendationRequest", {"requirements": "이전 대상 앱 서버의 메모리 여유를 늘리고 싶다.", "overrides": {}})
-    example("recommendation-response", "Recommendation", {"parameters": {"compute_machine_type": "e2-medium"}, "rationale": {"compute_machine_type": "예시 후보. 실측 부하·가용성 확인 필요."}, "questions": []})
     plan = {"id": "plan_001", "migration_id": "mig_to_gcp", "target": {"id": "env_gcp_target", "cloud": "gcp"},
             "status": "REVIEWABLE", "effective_sizing": {**defaults["gcp"]["sizing"], "compute_machine_type": "e2-medium"},
             "changes": [{"address": "module.compute.google_compute_instance.this", "action": "UPDATE", "summary": "앱 VM 사양 변경. 대상 VM 정지가 필요할 수 있어 트래픽 전환 전에 실행."}],

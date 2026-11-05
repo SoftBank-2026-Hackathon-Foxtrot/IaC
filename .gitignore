@@ -49,3 +49,6 @@ terraform.rc
 .token-usage/
 __pycache__/
 .venv/
+compute/*.env
+compute/binding.local.json
+*.docker.tar

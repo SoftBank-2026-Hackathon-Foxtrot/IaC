@@ -1,9 +1,0 @@
-{
-  "parameters": {
-    "compute_machine_type": "e2-medium"
-  },
-  "rationale": {
-    "compute_machine_type": "예시 후보. 실측 부하·가용성 확인 필요."
-  },
-  "questions": []
-}

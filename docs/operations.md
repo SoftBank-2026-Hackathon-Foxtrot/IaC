@@ -12,7 +12,7 @@
 
 ## 관리 중인 환경에서의 마이그레이션
 
-기존 migration_id로 대상 root·baseline·backend를 조회하고, 허용된 sizing 변경값만 병합해 plan합니다. 이미 있는 대상 자원에 빈 state를 연결하지 않으며 원본 state에는 apply하지 않습니다. 사용자 확인 후 같은 saved plan을 실행하고 성공한 설정을 대상 baseline에 반영합니다. 출력과 후속 작업은 [인터페이스 v0.2](provisioning-interface.md)를 따릅니다. 현재 저장소에는 이 실행기나 baseline 저장소가 구현되어 있지 않습니다.
+기존 migration_id로 대상 root·baseline·backend를 조회하고, 허용된 sizing 변경값만 병합해 plan합니다. 이미 있는 대상 자원에 빈 state를 연결하지 않으며 원본 state에는 apply하지 않습니다. 사용자 확인 후 같은 saved plan을 실행하고 성공한 설정을 대상 baseline에 반영합니다. 출력과 후속 작업은 [인터페이스 v0.3](provisioning-interface.md)를 따릅니다. 현재 저장소에는 이 실행기나 baseline 저장소가 구현되어 있지 않습니다.
 
 ## 인증과 권한
 

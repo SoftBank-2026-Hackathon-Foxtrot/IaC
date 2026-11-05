@@ -1,4 +1,4 @@
-# 프로비저닝 인터페이스 v0.2 — 관리 중인 환경의 사양 조정
+# 프로비저닝 인터페이스 v0.3 — 관리 중인 환경의 사양 조정
 
 **목표: 이미 플랫폼이 관리하는 이전 대상 환경에 필요한 사양값만 조정하고, 확인한 Terraform 계획을 실행한다.**
 
@@ -36,14 +36,13 @@ flowchart LR
 
 UI는 입력 중인 값과 추천 채택을 자체 상태로 관리한다. 추천은 값을 저장하거나 실행하지 않는다. UI는 선택한 추천값과 직접 입력한 값을 같은 `overrides`로 보낸다. 설정 초안 CRUD, 추천 채택 전용 API, 설정 revision API는 없다.
 
-## API 5개
+## API 4개
 
 공통 경로: `/api/v1/provisioning`. 타입은 [OpenAPI](../contracts/provisioning.openapi.yaml), 완전한 예시는 [예시 목록](../contracts/examples/index.json)에 있다.
 
 | 호출 | 입력 → 출력 |
 |---|---|
 | GET `/migrations/{migration_id}` | 기존 이전 작업 ID → 원본/대상 식별자, 대상 현재 sizing, 선택지 JSON Schema |
-| POST `/migrations/{migration_id}/recommendations` | 요구사항 + 현재 overrides → 추천값·이유·추가 질문 (200) |
 | POST `/migrations/{migration_id}/plans` | overrides → PLAN job (202) |
 | POST `/plans/{plan_id}/apply` | 검토한 plan ID, 본문 없음 → APPLY job (202) |
 | GET `/jobs/{job_id}` | job ID → 진행 상태, 완료 시 plan 또는 handoff |
@@ -58,9 +57,18 @@ UI는 입력 중인 값과 추천 채택을 자체 상태로 관리한다. 추�
 
 GCP 대상은 `{"overrides": {"compute_machine_type": "e2-medium"}}`. 변경할 값이 없으면 `{"overrides": {}}`를 보낸다. UI는 `sizing_schema`로 폼을 만들고 서버는 실제 대상 cloud 기준으로 다시 검사한다. 공통 OpenAPI의 `Sizing`만 검사해서 다른 클라우드 필드를 허용하면 안 된다.
 
+로컬에서 동일한 입력 경계를 확인할 수 있다.
+
+```bash
+python tools/render_inputs.py context --cloud gcp --base environments/gcp/deployment.example.tfvars.json
+python tools/render_inputs.py render-overrides --cloud gcp --base environments/gcp/deployment.example.tfvars.json --request contracts/examples/gcp-plan-request.json --output reviewed.tfvars.json
+```
+
+적용 후 플랫폼이 VM 출력을 등록하고 [COMPUTE](../compute/README.md)에 `targetRef`를 넘긴다.
+
 ## 내 파트의 처리
 
-1. **조회·추천:** 플랫폼이 관리하는 원본/대상 정보와 현재 대상 sizing을 사용한다. AI에는 허용 사양과 필요한 부하 정보만 제공한다. 각 추천값은 카탈로그 검사와 이유가 필요하며 정보가 부족하면 빈 parameters와 questions를 반환한다. 가격·성능 동등성을 보장하지 않는다.
+1. **사양 조회:** IaC는 대상의 현재값과 허용 범위를 제공한다. AI 추천과 사용자 선택은 컨트롤 플레인이 처리한다.
 2. **검증·병합:** `merge_overrides(target_cloud, target_baseline, overrides)`로 일부 값만 합친다. 필드·타입·범위뿐 아니라 DB 용량과 자동 확장 상한 등 병합 후 조건도 검사한다. baseline과 원본 환경은 변경하지 않는다.
 3. **계획:** 대상의 관리 코드·state로 plan을 만들고 민감값을 제거한 전체 변경 목록과 최종 sizing을 반환한다. UI 입력은 이후 달라져도 이 plan은 불변이다. 재계획하면 새 ID를 만들고 이전 계획은 무효화한다.
 4. **실행·인계:** 사용자가 확인한 plan ID로 저장된 계획을 실행하고, 성공한 최종 설정을 플랫폼의 대상 baseline에 반영한다. 완료 job에 `terraform output -json handoff`만 넣어 앱 배포·DB 이전 모듈에 전달한다.

@@ -1,4 +1,4 @@
-"""Validate a human-owned deployment and merge an allowlisted AI sizing proposal.
+"""Validate a managed deployment, expose sizing options and merge selected values.
 
 Only writes a reviewable tfvars JSON. Never calls Terraform, a cloud API or a shell.
 Python standard library only; run from any working directory.
@@ -138,12 +138,12 @@ def merge_recommendation(cloud, baseline, proposal):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for command in ("validate", "render"):
+    for command in ("validate", "context", "render", "render-overrides"):
         p = sub.add_parser(command)
         p.add_argument("--cloud", required=True, choices=["aws", "gcp"])
         p.add_argument("--base", required=True, type=Path)
-        if command == "render":
-            p.add_argument("--proposal", required=True, type=Path)
+        if command in ("render", "render-overrides"):
+            p.add_argument("--proposal" if command == "render" else "--request", required=True, type=Path)
             p.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     try:
@@ -151,18 +151,27 @@ def main():
         if args.command == "validate":
             validate_config(args.cloud, base)
             print("Input checks passed. Run terraform validate/plan and review live capacity separately.")
+        elif args.command == "context":
+            validate_config(args.cloud, base)
+            print(json.dumps({"target_sizing": base["sizing"], "sizing_schema": {
+                "type": "object", "properties": POLICY["clouds"][args.cloud],
+                "additionalProperties": False}}, indent=2))
         else:
-            proposal = load_json(args.proposal)
-            result = merge_recommendation(args.cloud, base, proposal)
-            require(args.output.resolve() not in (args.base.resolve(), args.proposal.resolve()),
+            if args.command == "render":
+                input_path = args.proposal
+                result = merge_recommendation(args.cloud, base, load_json(input_path))
+            else:
+                input_path = args.request
+                request = load_json(input_path)
+                require(type(request) is dict and set(request) == {"overrides"}, "Expected only overrides")
+                result = merge_overrides(args.cloud, base, request["overrides"])
+            require(args.output.resolve() not in (args.base.resolve(), input_path.resolve()),
                     "Output must not overwrite source inputs")
             # Exclusive creation protects a previously reviewed proposal from silent replacement.
             with args.output.open("x", encoding="utf-8") as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
                 f.write("\n")
             print(f"Wrote {args.output}. Human review and a saved Terraform plan are still required.")
-            for key in proposal["parameters"]:
-                print(f"  {key}: {base['sizing'][key]} -> {result['sizing'][key]}")
     except (ValueError, TypeError, KeyError, OSError) as exc:
         print(f"Rejected: {exc}", file=sys.stderr)
         return 1

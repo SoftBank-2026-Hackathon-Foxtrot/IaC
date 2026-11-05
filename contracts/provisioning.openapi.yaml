@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Foxtrot Managed Provisioning — DRAFT
-  version: 0.2.0
+  version: 0.3.0
   description: Source and target code, baseline, state and credentials are already managed by the platform. Only target sizing
     can change. Specification only; no API or runner implemented. See docs/provisioning-interface.md.
 servers:
@@ -24,27 +24,6 @@ paths:
                 $ref: '#/components/schemas/Context'
         default:
           $ref: '#/components/responses/Error'
-  /migrations/{migration_id}/recommendations:
-    post:
-      operationId: recommendSizing
-      summary: 대상 사양 추천; 저장·적용하지 않음
-      parameters:
-      - $ref: '#/components/parameters/MigrationId'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Recommendation'
-        default:
-          $ref: '#/components/responses/Error'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RecommendationRequest'
   /migrations/{migration_id}/plans:
     post:
       operationId: createPlan
@@ -266,39 +245,6 @@ components:
       - target
       - target_sizing
       - sizing_schema
-    RecommendationRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        requirements:
-          type: string
-          minLength: 1
-          maxLength: 4000
-        overrides:
-          $ref: '#/components/schemas/Sizing'
-      required:
-      - requirements
-      - overrides
-    Recommendation:
-      type: object
-      additionalProperties: false
-      properties:
-        parameters:
-          $ref: '#/components/schemas/Sizing'
-        rationale:
-          type: object
-          additionalProperties:
-            type: string
-            minLength: 1
-            maxLength: 2000
-        questions:
-          type: array
-          items:
-            type: string
-      required:
-      - parameters
-      - rationale
-      - questions
     PlanRequest:
       type: object
       additionalProperties: false

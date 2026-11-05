@@ -2,7 +2,7 @@
 
 **원본·이전 대상 환경의 배포 코드와 기본 설정은 이미 플랫폼이 관리합니다.** 사용자는 EC2 사양 같은 일부 값만 조정하고, 필요하면 AI 추천을 받아 대상의 Terraform plan을 확인·실행합니다. 이 저장소는 그 기반 모듈과 입력 계약을 제공합니다.
 
-Terraform 모듈 `v0.1` / 연동 계약 `v0.2` / PoC·개발 환경 전용. Kubernetes는 필요하지 않습니다.
+Terraform 모듈 `v0.1` / 연동 계약 `v0.3` / PoC·개발 환경 전용. Kubernetes는 필요하지 않습니다.
 
 ## 무엇을 만드는가
 
@@ -32,9 +32,11 @@ AI 추천 API/모델 호출, 사용자 승인 UI, apply 실행기, 실제 비용
 
 ## 먼저 볼 파일
 
+- [COMPUTE 어댑터 구성과 작업 순서](compute/README.md) — 대상 VM에서 컨테이너 이미지 확인·웹 기동·내부 점검
+
 - [치이카와 LIVE PoC 연결](docs/demo-deployment.md) — Redis 이전 설정, 관리망 입력, DB 초기 권한과 WebSocket
 - [구조·선택 이유·네트워크 구성도](docs/design.md)
-- [UI·실행 조정기 연동 인터페이스](docs/provisioning-interface.md) — 관리 중인 환경 전제, API 5개, 입출력·담당
+- [UI·실행 조정기 연동 인터페이스](docs/provisioning-interface.md) — 관리 중인 환경 전제, API 4개, 입출력·담당
 - [OpenAPI 초안](contracts/provisioning.openapi.yaml) · [요청/응답 예시](contracts/examples/index.json) — 서버 미구현
 - [입력, AI 추천, 태그·라벨 계약](docs/platform-contract.md)
 - [실행·권한·state·삭제·검증 안내](docs/operations.md)
