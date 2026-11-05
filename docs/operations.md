@@ -46,7 +46,7 @@ terraform -chdir=environments/aws plan -input=false -var-file=deployment.tfvars.
 
 GCP도 동일하며 `--cloud gcp`, `environments/gcp`를 사용합니다. 이미 승인한 입력을 바꾸면 새로운 plan을 만들고 다시 검토합니다. AI의 rationale는 근거 후보이지 성능·비용 보장이 아닙니다.
 
-실제 실행은 검토된 `reviewed.tfplan`을 사용합니다. 이 초안 작업에서는 apply를 실행하지 않았습니다. CI도 apply 권한과 credentials를 받지 않습니다.
+실제 실행은 검토된 `reviewed.tfplan`을 사용합니다. CI는 mock provider로 plan을 검사합니다. 실제 EC2·GCE 배포는 별도 리허설 state에서 검증했습니다.
 
 ## 생성 후 확인
 
@@ -71,7 +71,8 @@ RDS는 삭제 보호를 해제한 plan/apply 이후 고유 final snapshot 이름
 - Terraform fmt/validate: AWS/GCP root와 참조 모듈.
 - mock-provider plan tests: root 연결, 공개 SSH/DB 포트/미허용 사양 거부, DB/스토리지/Redis 보안 기본값.
 - Python tests: 추천 allowlist·타입·범위·설명, 기존 설정 보존, 다른 cloud·중복 JSON 키·CIDR 중복·비밀값 거부.
-- **미수행:** live plan/apply, 리전별 용량·가격·quota 조회, 실제 TLS·SQL 권한·복제·앱 연결, backup 복구, 실제 비용/보안 수집.
+- EC2·GCE 모듈의 실제 plan/apply/destroy 및 데모 앱 검증은 [클라우드 리허설 기록](compute-cloud-rehearsal.md)에 있습니다.
+- 남은 검증은 관리형 서비스를 포함한 전체 환경 배포, 리전별 용량·가격·quota, 관리형 서비스의 TLS·SQL 권한·복제·앱 연결, backup 복구, 비용·보안 수집입니다.
 
 ## 공식 참고
 

@@ -70,4 +70,6 @@ curl -i -H "$auth" -H 'Content-Type: application/json' -H 'Idempotency-Key: crea
 
 **준비 완료의 의미.** 이 프로필은 원본과 같은 웹 이미지가 대상에서 HTTP 200을 반환하는 지점까지 제공한다. START_SYNC 성공 후 lifecycle은 SYNCING, readiness.advance는 UNKNOWN이다. 어댑터가 업무 쓰기 차단을 독립 관측하기 전에는 targetWritesPossible을 보수적으로 true로 반환한다. 팀 데모의 최종 업무 검증에는 원본 Worker가 실행 중인 격리 환경에서 [데모의 check_live.py](https://github.com/SoftBank-2026-Hackathon-Foxtrot/demo/blob/bc9b691/scripts/check_live.py)를 사용한다. 이 검사는 테스트 메시지와 주문을 생성한다.
 
+팀 데모의 실제 EC2→GCE 배포, 테스트 진입점 전환, 롤백 결과는 [클라우드 리허설 기록](../docs/compute-cloud-rehearsal.md)에 있다.
+
 다음 통합은 관리망 연결, 운영용 업무 정지 근거, 트래픽 어댑터를 통한 진입점 변경이다. QUIESCE·CUTOVER·RESUME은 해당 제어와 검증이 연결되면 프로필에 추가한다. 공통 계약은 [팀 설계 초안 0.2](https://app.notion.com/p/Design-Doc-2-40fb7958f32780ee9403e6284e1c3210)와 [object-migration](https://github.com/SoftBank-2026-Hackathon-Foxtrot/object-migration/blob/75da4f001d573e8a03bf6d7b98214334ef5d46d9/api/openapi.yaml)을 따른다.

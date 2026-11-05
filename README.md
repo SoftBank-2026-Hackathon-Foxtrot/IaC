@@ -92,7 +92,7 @@ terraform -chdir=environments/gcp validate
 terraform -chdir=environments/gcp test
 ```
 
-`terraform test`는 **mock provider + plan**만 사용합니다. 실제 계정/프로젝트에 접속해 가용성·할당량·네트워크 연결을 확인한 결과가 아닙니다. 실환경 apply나 마이그레이션은 수행하지 않았습니다.
+`terraform test`는 **mock provider + plan**으로 전체 환경 구성을 점검합니다. EC2·GCE 모듈은 별도로 실제 계정에 배포해 팀 데모의 웹 트래픽 전환과 롤백을 확인했습니다. [측정 결과와 자원 정리 기록](docs/compute-cloud-rehearsal.md)
 
 ## AI 추천 입력 예시
 
