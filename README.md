@@ -32,7 +32,7 @@ AI 추천 API/모델 호출, 사용자 승인 UI, apply 실행기, 실제 비용
 
 ## 먼저 볼 파일
 
-- [COMPUTE 어댑터 구성과 작업 순서](compute/README.md) — 대상 VM에서 컨테이너 이미지 확인·웹 기동·내부 점검
+- [COMPUTE 호출 방법](compute/README.md) — 컨트롤 플레인에서 계획 등록, 컨테이너 준비·기동, 결과 조회
 
 - [치이카와 LIVE PoC 연결](docs/demo-deployment.md) — Redis 이전 설정, 관리망 입력, DB 초기 권한과 WebSocket
 - [구조·선택 이유·네트워크 구성도](docs/design.md)

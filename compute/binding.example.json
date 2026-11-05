@@ -1,5 +1,8 @@
 {
   "targetRef": "resource:gcp-demo-web",
+  "sourceRef": "resource:aws-demo-web",
+  "workloadScopeRef": "workload:demo-web",
+  "bindingRef": "binding:demo-web-entry",
   "imageId": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "configVersion": "demo-web-config-v1",
   "envFile": "web.env",

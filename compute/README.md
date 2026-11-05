@@ -39,13 +39,35 @@ python compute/runner.py START_SYNC --target-ref resource:gcp-demo-web --binding
 
 실행기는 고정한 이미지 ID로 웹 컨테이너 한 개를 만들고 VM의 loopback 임시 포트로 HTTP 200을 확인한다. 같은 설정으로 다시 호출하면 기존 컨테이너를 확인한다. 이름 충돌, 종료된 컨테이너, 점검 실패는 운영자가 상태를 확인할 수 있게 남긴다. 이때 앱 시작 코드 자체의 외부 쓰기는 발생할 수 있다. 데모 앱은 시작 시 DB 스키마를 초기화하므로 대상 환경에서 DDL 권한·실행 시점을 먼저 합의한다. 웹 프로세스 안에서 큐 소비나 예약 작업을 시작하는 앱은 그 기능을 비활성화할 수 있어야 한다.
 
-### 다음 구현 순서와 완료 기준
+### 컨트롤 플레인에서 호출하기
 
-| 순서 | 맡을 곳 | 완료 기준 |
-|---|---|---|
-| 1 | 플랫폼 + IaC | 기존 환경 조회 → 확정 사양 병합 → 승인된 saved plan 적용 → handoff를 targetRef에 저장. 대상 변경 0건으로도 앱 준비 진행 |
-| 2 | COMPUTE | 서비스 인증 후 공통 API로 계획 등록(`201`), 액션 접수(`202 + Location`), operation·migration 조회. 관리 DB의 참조로 대상과 설정을 해석하고 승인된 원격 실행 경로로 이 실행기를 호출 |
-| 3 | COMPUTE + 앱 담당 | 중복 접수·revision 검사, 대상별 실행 직렬화, 재시작 후 실제 컨테이너 대조. 상태 불명이면 UNKNOWN → RECONCILE. 앱 경유 DB·Redis·객체 접근과 Worker 중지를 검사한 뒤 준비 판정 |
-| 4 | COMPUTE + 트래픽 + 오케스트레이터 | QUIESCE로 요청·Worker 배수, CUTOVER로 진입점 변경·검증, RESUME으로 업무 재개. 원본 복귀 전 현재 데이터 경로와 호환성 검증 |
+대상 VM에서 [HTTP 어댑터](server.py) 한 개를 실행한다. 시작할 때 IaC APPLY 결과의 [handoff 형식](../contracts/examples/gcp-handoff-response.json)과 로컬 binding을 읽어 `targetRef`를 대상 환경·VM ID·설정 버전에 연결한다. 플랫폼은 이 VM의 어댑터 주소를 관리한다. `workflowId`는 handoff의 `migration_id`를 사용한다.
 
-현재 제공하는 것은 **대상 VM용 준비 실행기**다. HTTP 어댑터를 붙일 때 [object-migration 구현](https://github.com/SoftBank-2026-Hackathon-Foxtrot/object-migration/blob/75da4f001d573e8a03bf6d7b98214334ef5d46d9/api/openapi.yaml)의 공통 경로와 [팀 설계 초안 0.2](https://app.notion.com/p/Design-Doc-2-40fb7958f32780ee9403e6284e1c3210)를 따른다. 작업 요청에는 등록 ID만 받고 로컬 파일 경로·명령·Secret은 대상 측에서 해석한다. 실행기의 HTTP 200 관측은 한 개의 점검 근거이며, 전체 준비 판정과 트래픽 변경은 이후 단계에서 수행한다.
+```bash
+# 대상 VM의 저장소 루트에서 실행. COMPUTE_TOKEN은 서비스 환경에서 주입한다.
+python -m compute.server --handoff /etc/foxtrot/handoff.json \
+  --binding /etc/foxtrot/binding.json --db /var/lib/foxtrot/compute.db
+```
+
+어댑터는 `127.0.0.1:8787`에서 수신한다. 컨트롤 플레인은 기존 관리 터널 또는 사설 HTTPS 프록시를 통해 호출한다. 같은 VM에서 직접 확인할 때는 아래 명령을 사용한다. 실환경에서는 [계획 예시](plan.example.json)의 참조를 등록값으로 바꾼다.
+
+```bash
+base=http://127.0.0.1:8787/v1
+auth="Authorization: Bearer ${COMPUTE_TOKEN}"
+curl -fsS -H "$auth" "$base/capabilities"
+curl -i -H "$auth" -H 'Content-Type: application/json' -H 'Idempotency-Key: create-demo-1' \
+  --data @compute/plan.example.json "$base/migrations"
+```
+
+| 호출 | 다음에 사용할 값 |
+|---|---|
+| `POST /v1/migrations` | `201`. 응답의 `migrationId`와 `revision` 보관 |
+| `POST /v1/migrations/{id}/actions` | `{"action":"PREPARE","expectedRevision":1}`와 새 Idempotency-Key를 전달. `202` 응답의 `Location` 조회 |
+| `GET /v1/operations/{id}` | `SUCCEEDED`이면 migration 재조회. `FAILED`·`UNKNOWN`이면 상태와 허용된 복구 명령 확인 |
+| `GET /v1/migrations/{id}` | 최신 revision과 allowedActions로 `START_SYNC` 요청. 완료된 operation에서 컨테이너 ID와 VM 내부 probePort 확인 |
+
+모든 호출은 Bearer 인증을 사용한다. 응답을 잃으면 **같은 키와 본문**으로 재시도한다. SQLite에 접수와 실행 의도를 함께 보관하고 대상에서 명령을 하나씩 실행한다. 서비스는 VM당 한 프로세스로 운영하고 DB 파일을 영속 디스크에 둔다. 재시작 시 대기 작업은 이어서 실행하고, 실행 중 끊긴 작업은 UNKNOWN으로 기록한다. RECONCILE은 기존 이미지·컨테이너를 읽고 점검한다. 시작하지 않았거나 종료된 컨테이너는 관리자가 확인한다.
+
+**준비 완료의 의미.** 이 프로필은 원본과 같은 웹 이미지가 대상에서 HTTP 200을 반환하는 지점까지 제공한다. START_SYNC 성공 후 lifecycle은 SYNCING, readiness.advance는 UNKNOWN이다. 어댑터가 업무 쓰기 차단을 독립 관측하기 전에는 targetWritesPossible을 보수적으로 true로 반환한다. 팀 데모의 최종 업무 검증에는 원본 Worker가 실행 중인 격리 환경에서 [데모의 check_live.py](https://github.com/SoftBank-2026-Hackathon-Foxtrot/demo/blob/bc9b691/scripts/check_live.py)를 사용한다. 이 검사는 테스트 메시지와 주문을 생성한다.
+
+다음 통합은 관리망 연결, 운영용 업무 정지 근거, 트래픽 어댑터를 통한 진입점 변경이다. QUIESCE·CUTOVER·RESUME은 해당 제어와 검증이 연결되면 프로필에 추가한다. 공통 계약은 [팀 설계 초안 0.2](https://app.notion.com/p/Design-Doc-2-40fb7958f32780ee9403e6284e1c3210)와 [object-migration](https://github.com/SoftBank-2026-Hackathon-Foxtrot/object-migration/blob/75da4f001d573e8a03bf6d7b98214334ef5d46d9/api/openapi.yaml)을 따른다.

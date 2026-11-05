@@ -21,8 +21,12 @@ def docker(*args, timeout=30):
 def load_binding(path):
     binding = json.loads(path.read_text(encoding="utf-8-sig"))
     required = {"targetRef", "imageId", "configVersion", "envFile", "command", "port", "readinessPath"}
-    if not isinstance(binding, dict) or binding.keys() != required:
+    optional = {"sourceRef", "workloadScopeRef", "bindingRef", "dockerNetwork"}
+    if not isinstance(binding, dict) or not required <= binding.keys() <= required | optional:
         raise ValueError("Use the registered target binding fields from binding.example.json")
+    if "dockerNetwork" in binding and (not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]*", binding["dockerNetwork"])
+                                       or binding["dockerNetwork"] in {"host", "none"}):
+        raise ValueError("Use a private bridge network")
     if not re.fullmatch(r"resource:[a-z0-9][a-z0-9-]{0,62}", binding["targetRef"]):
         raise ValueError("Invalid targetRef")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", binding["imageId"]):
@@ -52,7 +56,7 @@ def observe_web(container, binding):
         try:
             conn.request("GET", binding["readinessPath"])
             if conn.getresponse().status == 200:
-                return
+                return int(match[1])
         except (OSError, http.client.HTTPException):
             pass
         finally:
@@ -61,12 +65,15 @@ def observe_web(container, binding):
     raise RuntimeError("Web readiness timed out. Container retained for inspection.")
 
 
-def execute(action, path, target_ref):
+def execute(action, path, target_ref, *, expected_revision=None, observe_only=False):
     if action not in ("PREPARE", "START_SYNC"):
         raise ValueError("Unsupported COMPUTE action")
     binding, env_file = load_binding(path)
     if binding["targetRef"] != target_ref:
         raise ValueError("Plan targetRef differs from the registered VM binding")
+    revision = binding_revision(binding)
+    if expected_revision and expected_revision != revision:
+        raise ValueError("Registered configuration changed after plan creation")
     image = binding["imageId"]
     if docker("image", "inspect", "--format", "{{.Id}}", image) != image:
         raise ValueError("Source image is missing on the target")
@@ -75,7 +82,6 @@ def execute(action, path, target_ref):
         return {**result, "check": "local-image-and-config-present"}
 
     # configVersion covers secret versions. Keep the contents of envFile off the wire.
-    revision = hashlib.sha256(json.dumps(binding, sort_keys=True).encode()).hexdigest()
     name = "foxtrot-stage-" + target_ref.removeprefix("resource:")
     existing = docker("ps", "-aq", "--no-trunc", "--filter", f"name=^/{name}$")
     if existing:
@@ -84,17 +90,24 @@ def execute(action, path, target_ref):
             raise RuntimeError("Target already has another container. Reconcile the deployment.")
         container = existing
     else:
+        if observe_only:
+            raise RuntimeError("Expected staged container has not been observed")
+        network = ["--network", binding["dockerNetwork"]] if "dockerNetwork" in binding else []
         container = docker("create", "--pull=never", "--name", name,
                            "--label", f"foxtrot.stage.revision={revision}",
                            "--env-file", str(env_file), "--publish", f'127.0.0.1::{binding["port"]}',
-                           image, *binding["command"])
+                           *network, image, *binding["command"])
     state = docker("inspect", "--format", "{{.State.Status}}", container)
-    if state == "created":
+    if state == "created" and not observe_only:
         docker("start", container)
     elif state != "running":
         raise RuntimeError(f"Container is {state}. Inspect it before retrying.")
-    observe_web(container, binding)
-    return {**result, "containerId": container, "check": "target-web-probe-passed"}
+    port = observe_web(container, binding)
+    return {**result, "containerId": container, "probePort": port, "check": "target-web-probe-passed"}
+
+
+def binding_revision(binding):
+    return hashlib.sha256(json.dumps(binding, sort_keys=True).encode()).hexdigest()
 
 
 def main():
