@@ -29,6 +29,20 @@
 | control-plane | 시드의 `actors` 프로세스 수 = `app.api_workers` + `app.worker_count`. heartbeat 토큰은 `app.secret_env.WORKLOAD_TOKEN`으로 비밀 저장소에서 읽습니다 |
 | traffic | `/readyz`를 그대로 쓰고, `app.tunnel_secret`이 있으면 cloudflared를 같은 VM에서 실행 |
 
+## 미리 올려 둔 리소스 (`environments/foundation/*`)
+
+클라우드마다 한 번만 만드는 유저 앱 공용 자원입니다. VPC부터 앱까지 나머지는 환경을 만들 때 생깁니다.
+
+| 리소스 | AWS (`foundation/aws`) | GCP (`foundation/gcp`) |
+|---|---|---|
+| 이미지 저장소 | ECR `chiikawa-groupbuy` (최근 10개 유지, push 시 스캔) | Artifact Registry `apps` (asia-northeast3, 최근 10개 유지) |
+| 앱 이미지 | `chiikawa-groupbuy:20cf750`, `latest` (demo `20cf750`, linux/amd64) | 같음 |
+| provisioner state | S3 `foxtrot-provisioner-state-<계정>` (버전 관리, 암호화, 공개 차단) | (AWS 버킷 공용) |
+| Tailscale 인증 키 자리 | Secrets Manager `foxtrot/tailscale-authkey-aws` (값은 트래픽 파트가 입력) | Secret Manager `foxtrot-tailscale-authkey-gcp` |
+| Cloudflare 터널 토큰 | 아직 없음 | traffic 팀의 `foxtrot-traffic-gcp-tunnel-token` 사용 |
+
+foundation의 Terraform state는 실행한 위치의 로컬 파일입니다. 잃어버려도 `terraform import`로 되살릴 수 있는 자원만 둡니다.
+
 ## 앱 부팅 순서 (`modules/app_runtime`)
 
 1. Docker 설치, 레지스트리 로그인(ECR: 인스턴스 역할 / AR: VM 서비스 계정 토큰), 이미지 pull
