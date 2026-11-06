@@ -27,6 +27,9 @@ HERE = Path(__file__).resolve().parent
 
 
 def load(path: str | None) -> tuple[dict, dict]:
+    catalog = json.loads((HERE / "catalog.json").read_text())
+    if not path and os.environ.get("PROVISIONER_CONFIG_JSON"):  # containers pass the config inline
+        return catalog, json.loads(os.environ["PROVISIONER_CONFIG_JSON"])
     config_path = Path(path or os.environ.get("PROVISIONER_CONFIG", HERE / "config.json"))
     if not config_path.exists():
         sys.exit(f"config not found: {config_path} (copy provisioner/config.example.json)")

@@ -1,0 +1,67 @@
+#!/bin/bash
+# Platform gateway. Installs a boot-time service that (re)applies NAT and forwarding, then
+# joins Tailscale and starts cloudflared as soon as their secrets have values. The secrets are
+# filled by the traffic part; until then the gateway still does NAT.
+set -euo pipefail
+exec > >(tee -a /var/log/foxtrot-gateway.log) 2>&1
+
+dnf install -y iptables-nft
+curl -fsSL https://tailscale.com/install.sh | sh
+curl -fsSL -o /tmp/cloudflared.rpm https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-x86_64.rpm
+dnf install -y /tmp/cloudflared.rpm
+
+cat > /etc/sysctl.d/90-foxtrot-forward.conf <<'EOF'
+net.ipv4.ip_forward = 1
+EOF
+sysctl --system
+
+cat > /usr/local/sbin/foxtrot-nat.sh <<'EOF'
+#!/bin/bash
+set -e
+WAN=$(ip route show default | awk '{print $5; exit}')
+iptables -t nat -C POSTROUTING -o "$WAN" -s ${vpc_cidr} -j MASQUERADE 2>/dev/null \
+  || iptables -t nat -A POSTROUTING -o "$WAN" -s ${vpc_cidr} -j MASQUERADE
+EOF
+cat > /usr/local/sbin/foxtrot-join.sh <<'EOF'
+#!/bin/bash
+# Waits for each secret to get a value, then joins. Runs at every boot.
+secret() { aws secretsmanager get-secret-value --region ${region} --secret-id "$1" --query SecretString --output text 2>/dev/null; }
+until KEY=$(secret '${tailscale_key}') && [ -n "$KEY" ] && [ "$KEY" != UNSET ]; do sleep 60; done
+tailscale up --authkey="$KEY" --hostname=${hostname} --advertise-tags=tag:mgmt \
+  --advertise-routes=${vpc_cidr} --accept-routes --reset
+if ! systemctl is-active --quiet cloudflared; then
+  until TOKEN=$(secret '${tunnel_token}') && [ -n "$TOKEN" ] && [ "$TOKEN" != UNSET ]; do sleep 60; done
+  cloudflared service install "$TOKEN"
+fi
+EOF
+chmod 700 /usr/local/sbin/foxtrot-nat.sh /usr/local/sbin/foxtrot-join.sh
+
+cat > /etc/systemd/system/foxtrot-nat.service <<'EOF'
+[Unit]
+Description=Foxtrot NAT for the management VPC
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/foxtrot-nat.sh
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+EOF
+cat > /etc/systemd/system/foxtrot-join.service <<'EOF'
+[Unit]
+Description=Foxtrot: join Tailscale and start cloudflared once secrets exist
+After=network-online.target tailscaled.service
+Wants=network-online.target
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/foxtrot-join.sh
+Restart=on-failure
+RestartSec=60
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now tailscaled foxtrot-nat.service
+systemctl enable --now --no-block foxtrot-join.service
+echo "gateway ready $(date -u +%FT%TZ)"
