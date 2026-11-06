@@ -58,3 +58,14 @@ variable "migration_source_cidrs" {
     error_message = "Use explicit RFC1918 or Tailscale IPv4 CIDRs, /24 through /32."
   }
 }
+
+variable "replication_cidrs" {
+  type        = set(string)
+  default     = []
+  nullable    = false
+  description = "다른 클라우드의 대상 DB가 이 DB로 복제 접속하는 공인 IP (/32 권장)"
+  validation {
+    condition     = alltrue([for c in var.replication_cidrs : can(cidrnetmask(c)) && tonumber(split("/", c)[1]) >= 24])
+    error_message = "복제 접속 허용은 /24~/32 CIDR만 받습니다."
+  }
+}

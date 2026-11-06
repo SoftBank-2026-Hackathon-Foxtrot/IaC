@@ -27,3 +27,9 @@ variable "availability_zones" {
   type        = list(string)
   description = "최소 두 개의 가용 영역"
 }
+
+variable "data_subnets_internet_route" {
+  type        = bool
+  default     = false
+  description = "데이터 subnet에 IGW 경로를 둡니다. 다른 클라우드에서 DB로 복제 접속할 때만 사용합니다."
+}

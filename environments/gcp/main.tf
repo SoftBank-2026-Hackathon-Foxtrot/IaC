@@ -14,11 +14,12 @@ module "network" {
   depends_on            = [google_project_service.required]
 }
 module "storage" {
-  source     = "../../modules/gcp/storage"
-  name       = var.bucket_name
-  labels     = merge(module.metadata.common, { component = "storage" })
-  region     = var.region
-  depends_on = [google_project_service.required]
+  source        = "../../modules/gcp/storage"
+  name          = var.bucket_name
+  force_destroy = var.force_destroy_storage
+  labels        = merge(module.metadata.common, { component = "storage" })
+  region        = var.region
+  depends_on    = [google_project_service.required]
 }
 module "iam" {
   source      = "../../modules/gcp/iam"
@@ -52,7 +53,8 @@ module "compute" {
   image                 = var.image
   subnetwork_id         = module.network.subnetwork_id
   service_account_email = module.iam.service_account_email
-  depends_on            = [module.firewall]
+  startup_script        = module.app_runtime.script
+  depends_on            = [module.firewall, google_secret_manager_secret_iam_member.app]
 }
 module "cloud_sql" {
   source              = "../../modules/gcp/cloud_sql"
@@ -68,6 +70,8 @@ module "cloud_sql" {
   database_name       = var.database_name
   app_service_account = module.iam.service_account_email
   deletion_protection = var.deletion_protection
+  admin_password      = random_password.db_admin.result
+  authorized_networks = var.db_authorized_networks
   depends_on          = [module.network]
 }
 module "memorystore" {
@@ -79,5 +83,7 @@ module "memorystore" {
   service_range_name = module.network.service_range_name
   memory_gib         = var.sizing.cache_memory_gib
   high_availability  = var.sizing.cache_high_availability
+  auth_enabled       = var.redis_auth
+  transit_encryption = var.redis_transit_encryption
   depends_on         = [module.network]
 }

@@ -42,3 +42,9 @@ variable "service_account_email" {
   type        = string
   description = "전용 앱 service account email"
 }
+
+variable "startup_script" {
+  type        = string
+  default     = null
+  description = "부팅마다 실행하는 스크립트 (멱등)"
+}

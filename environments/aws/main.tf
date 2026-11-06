@@ -11,6 +11,8 @@ module "vpc" {
   public_subnet_cidr   = var.network.public_subnet_cidr
   private_subnet_cidrs = var.network.private_subnet_cidrs
   availability_zones   = var.network.availability_zones
+  # A database reachable from another cloud needs a route out of its subnets.
+  data_subnets_internet_route = length(var.replication_cidrs) > 0
 }
 module "security_groups" {
   source                   = "../../modules/aws/security_groups"
@@ -23,17 +25,20 @@ module "security_groups" {
   proxy_cidrs              = var.proxy_cidrs
   enable_cloudflare_tunnel = var.enable_cloudflare_tunnel
   migration_source_cidrs   = var.migration_source_cidrs
+  replication_cidrs        = var.replication_cidrs
 }
 module "s3" {
-  source      = "../../modules/aws/s3"
-  bucket_name = var.bucket_name
-  tags        = merge(module.metadata.common, { component = "storage" })
+  source        = "../../modules/aws/s3"
+  bucket_name   = var.bucket_name
+  force_destroy = var.force_destroy_storage
+  tags          = merge(module.metadata.common, { component = "storage" })
 }
 module "iam" {
-  source     = "../../modules/aws/iam"
-  name       = var.deployment_id
-  tags       = merge(module.metadata.common, { component = "identity" })
-  bucket_arn = module.s3.bucket_arn
+  source      = "../../modules/aws/iam"
+  name        = var.deployment_id
+  tags        = merge(module.metadata.common, { component = "identity" })
+  bucket_arn  = module.s3.bucket_arn
+  secret_arns = concat([aws_secretsmanager_secret.app_db.arn, module.rds.master_secret_arn], values(local.extra_secret_arns))
 }
 module "ec2" {
   source                = "../../modules/aws/ec2"
@@ -46,6 +51,7 @@ module "ec2" {
   security_group_id     = module.security_groups.app_id
   instance_profile_name = module.iam.instance_profile_name
   key_name              = var.key_name
+  user_data             = module.app_runtime.script
   depends_on            = [module.vpc]
 }
 module "rds" {
@@ -62,14 +68,16 @@ module "rds" {
   database_name             = var.database_name
   deletion_protection       = var.deletion_protection
   final_snapshot_identifier = var.final_snapshot_identifier
+  publicly_accessible       = length(var.replication_cidrs) > 0
 }
 module "elasticache" {
-  source            = "../../modules/aws/elasticache"
-  name              = "${var.deployment_id}-cache"
-  tags              = merge(module.metadata.common, { component = "cache" })
-  subnet_ids        = module.vpc.private_subnet_ids
-  security_group_id = module.security_groups.cache_id
-  node_type         = var.sizing.cache_node_type
-  node_count        = var.sizing.cache_node_count
-  auth_token        = var.redis_auth_token
+  source             = "../../modules/aws/elasticache"
+  name               = "${var.deployment_id}-cache"
+  tags               = merge(module.metadata.common, { component = "cache" })
+  subnet_ids         = module.vpc.private_subnet_ids
+  security_group_id  = module.security_groups.cache_id
+  node_type          = var.sizing.cache_node_type
+  node_count         = var.sizing.cache_node_count
+  transit_encryption = var.redis_transit_encryption
+  auth_token         = var.redis_auth_token
 }
