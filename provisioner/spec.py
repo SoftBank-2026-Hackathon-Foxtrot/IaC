@@ -26,7 +26,7 @@ SUFFIX = re.compile(r"^[a-f0-9]{4}$")
 APP_FIELDS = {  # request (camelCase) -> Terraform app object
     "image": "image", "apiWorkers": "api_workers", "workerCount": "worker_count", "seedDemoData": "seed_demo_data",
     "env": "env", "apiEnv": "api_env", "workerEnv": "worker_env", "secretEnv": "secret_env",
-    "tunnelSecret": "tunnel_secret",
+    "tunnelSecret": "tunnel_secret", "port": "port",
 }
 ACCESS_FIELDS = {
     "aws": {"replicationCidrs": "replication_cidrs", "proxyCidrs": "proxy_cidrs", "migrationSourceCidrs": "migration_source_cidrs",
@@ -85,6 +85,8 @@ def render(req: dict, catalog: dict, config: dict, suffix: str, today: dt.date) 
     allowed_prefixes = cloud_conf.get("imagePrefixes")
     if req["app"].get("image") and allowed_prefixes:
         require(any(image.startswith(p) for p in allowed_prefixes), "app.image: registry repository is not allowed")
+    port = req["app"].get("port", app.get("port", 80))
+    require(type(port) is int and 1 <= port <= 65535, "app.port: an integer port")
     for key, value in req["app"].items():
         app[APP_FIELDS[key]] = value
     app["image"] = image

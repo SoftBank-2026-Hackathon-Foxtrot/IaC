@@ -141,7 +141,7 @@ class ServiceTest(unittest.TestCase):
         self.drain()
         env_id = created["environmentId"]
         before = self.service.store.environment(env_id)
-        self.assertEqual(self.service.update(env_id, {"app": {"tunnelSecret": "arn:aws:secretsmanager:x"}})[0], 202)
+        self.assertEqual(self.service.update(env_id, {"app": {"tunnelSecret": "arn:aws:secretsmanager:x", "port": 8000}})[0], 202)
         self.drain()
         after = self.service.store.environment(env_id)
         self.assertEqual(after["status"], "READY")
@@ -149,6 +149,7 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(after["tfvars"]["bucket_name"], before["tfvars"]["bucket_name"])
         self.assertEqual(after["tfvars"]["app"]["tunnel_secret"], "arn:aws:secretsmanager:x")
         self.assertEqual(after["tfvars"]["app"]["env"], {"A": "1"})
+        self.assertEqual(after["tfvars"]["app"]["port"], 8000)
         with self.assertRaises(spec.RequestError):
             self.service.update(env_id, {"cloud": "gcp"})
 
