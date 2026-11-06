@@ -44,6 +44,6 @@ TF_VAR_gcp_project_id=foxtrot-513413 terraform plan -out=platform.tfplan && terr
 
 ## 2026-11-06 배포 확인
 
-- 리소스 203개 생성. ECS 서비스 6개 RUNNING, 상태 검사 있는 서비스는 모두 HEALTHY. Redis 3개는 꺼 둠.
+- Terraform 관리 리소스 209개. ECS 서비스 6개 RUNNING, 상태 검사 있는 서비스는 모두 HEALTHY. Redis 3개는 꺼 둠.
 - 게이트웨이에서 내부 이름으로 확인: control-plane·db-proxy(HTTPS)·traffic·provisioner·console `200`, console `/api/health` → control-plane `200`, object-migration 토큰 없이 `401`, PgBouncer 6432 열림.
 - 아직 확인 못 함: Tailscale 경유 앱 VM 연결, 콘솔 공개 주소, GitHub 로그인, 실제 이전 (외부 비밀이 비어 있음).
