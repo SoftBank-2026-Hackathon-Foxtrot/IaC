@@ -50,4 +50,5 @@ TF_VAR_gcp_project_id=foxtrot-513413 terraform plan -out=platform.tfplan && terr
 - Terraform 관리 리소스 209개. ECS 서비스 6개 RUNNING, 상태 검사 있는 서비스는 모두 HEALTHY. Redis 3개는 꺼 둠.
 - 게이트웨이에서 내부 이름으로 확인: control-plane·db-proxy(HTTPS)·traffic·provisioner·console `200`, console `/api/health` → control-plane `200`, object-migration 토큰 없이 `401`, PgBouncer 6432 열림.
 - 공개 주소: `https://platform.foxtrot.live` 200, `/api/health` 200, `/api/auth/github/start` → GitHub(우리 Client ID, 콜백) 302, `/api/internal/*` 404.
-- 아직 확인 못 함: 브라우저 GitHub 로그인 완료, Tailscale 경유 앱 VM 연결(키 미입력), 트래픽 서비스의 Cloudflare 호출, 실제 이전.
+- 브라우저 GitHub 로그인 확인 (org 멤버, `/api/v1/me`). 콘솔 화면에는 아직 로그인 버튼이 없어 `/api/auth/github/start`로 들어감.
+- 아직 확인 못 함: Tailscale 경유 앱 VM 연결(키 미입력), 트래픽 서비스의 Cloudflare 호출, 실제 이전.
