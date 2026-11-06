@@ -80,6 +80,31 @@ class Service:
         self.store.update_environment(env_id, now(), status="APPLYING")
         return 202, {"environmentId": env_id, "jobId": self._enqueue(env_id, "APPLY"), "status": "APPLYING"}
 
+    def update(self, env_id: str, body: dict) -> tuple[int, dict]:
+        """Change a READY (or FAILED) environment in place: new app settings, sizing or access.
+
+        The body takes the same app / sizing / access fields as creation; they are merged into the
+        stored request. Org, cloud, template and target stay. Changing the app replaces the VM."""
+        env = self._get(env_id)
+        if env["status"] not in ("READY", "FAILED"):
+            raise Conflict("INVALID_STATE", f"only a READY or FAILED environment can be updated (now {env['status']})")
+        self._not_busy(env_id)
+        spec.require(type(body) is dict and not (body.keys() - {"app", "sizing", "access"}), "update takes app, sizing and access only")
+        stored = env["request"]
+        merged = {
+            "org": stored["org"], "cloud": stored["cloud"], "target": stored["target"],
+            "app": {"template": stored["template"], **stored["app"], **body.get("app", {})},
+            "sizing": {**stored["sizing"], **body.get("sizing", {})},
+            "access": {**stored["access"], **body.get("access", {})},
+        }
+        req = spec.parse(merged, self.catalog, self.config)
+        suffix = env["deployment_id"].rsplit("-", 1)[1]  # keep the same resources
+        tfvars = spec.render(req, self.catalog, self.config, suffix, self.today())
+        tfvars["final_snapshot_identifier"] = env["tfvars"].get("final_snapshot_identifier", tfvars.get("final_snapshot_identifier"))
+        tfvars["metadata"] = env["tfvars"]["metadata"]  # tags stay as created
+        self.store.update_environment(env_id, now(), request=req, tfvars=tfvars, status="PLANNING", error=None)
+        return 202, {"environmentId": env_id, "jobId": self._enqueue(env_id, "PLAN_APPLY"), "status": "PLANNING"}
+
     def destroy(self, env_id: str) -> tuple[int, dict]:
         env = self._get(env_id)
         if env["status"] in ("DESTROYED", "DESTROYING"):

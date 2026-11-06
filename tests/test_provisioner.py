@@ -136,6 +136,22 @@ class ServiceTest(unittest.TestCase):
         self.drain()
         self.assertEqual(self.service.get(created["environmentId"])["status"], "READY")
 
+    def test_update_keeps_resources_and_merges_settings(self):
+        _, created = self.service.create(body(app={"env": {"A": "1"}}))
+        self.drain()
+        env_id = created["environmentId"]
+        before = self.service.store.environment(env_id)
+        self.assertEqual(self.service.update(env_id, {"app": {"tunnelSecret": "arn:aws:secretsmanager:x"}})[0], 202)
+        self.drain()
+        after = self.service.store.environment(env_id)
+        self.assertEqual(after["status"], "READY")
+        self.assertEqual(after["deployment_id"], before["deployment_id"])
+        self.assertEqual(after["tfvars"]["bucket_name"], before["tfvars"]["bucket_name"])
+        self.assertEqual(after["tfvars"]["app"]["tunnel_secret"], "arn:aws:secretsmanager:x")
+        self.assertEqual(after["tfvars"]["app"]["env"], {"A": "1"})
+        with self.assertRaises(spec.RequestError):
+            self.service.update(env_id, {"cloud": "gcp"})
+
     def test_idempotency_key(self):
         first = self.service.create(body(), "key-1")
         self.assertEqual(self.service.create(body(), "key-1"), first)

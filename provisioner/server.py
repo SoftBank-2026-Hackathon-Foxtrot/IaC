@@ -6,6 +6,7 @@
   GET    /v1/environments
   GET    /v1/environments/{id}
   POST   /v1/environments/{id}/apply   apply a mode=plan environment's saved plan            → 202
+  POST   /v1/environments/{id}/update  {app?, sizing?, access?} merged into the environment  → 202
   DELETE /v1/environments/{id}         destroy everything the environment created            → 202
   GET    /v1/jobs/{id}                 status and the tail of the Terraform log
 """
@@ -20,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .service import Conflict, NotFound, Service
 from .spec import RequestError
 
-ENV = re.compile(r"^/v1/environments/(env-[a-f0-9]{12})(/apply)?$")
+ENV = re.compile(r"^/v1/environments/(env-[a-f0-9]{12})(/apply|/update)?$")
 JOB = re.compile(r"^/v1/jobs/(job-[a-f0-9]{12})$")
 MAX_BODY = 64 * 1024
 
@@ -85,8 +86,10 @@ class Handler(BaseHTTPRequestHandler):
                 return 200, {"environments": [service.view(e) for e in service.store.environments()]}
         if m := ENV.match(path):
             env_id, apply = m.group(1), m.group(2)
-            if apply and self.command == "POST":
+            if apply == "/apply" and self.command == "POST":
                 return service.apply(env_id)
+            if apply == "/update" and self.command == "POST":
+                return service.update(env_id, self.body())
             if not apply and self.command == "GET":
                 return 200, service.get(env_id)
             if not apply and self.command == "DELETE":
