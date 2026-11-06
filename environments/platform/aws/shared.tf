@@ -132,12 +132,11 @@ locals {
   # Values that come from other systems: created with the placeholder UNSET; owners overwrite
   # them (Terraform ignores later changes). Services treat UNSET as "not configured".
   external = {
-    "tailscale-authkey-mgmt"     = "Tailscale auth key (tag:mgmt) for the platform gateway"
-    "cloudflare-tunnel-platform" = "Cloudflare tunnel token for the platform (console)"
-    "cloudflare-api-token"       = "Cloudflare API token for the traffic service (LB edit, pool health read)"
-    "github-client-secret"       = "GitHub OAuth app secret for console login"
-    "redis-endpoints-proxy"      = "STATEMIG_ENDPOINTS for the Redis proxy: aws=redis://app@<aws>:6379,gcp=redis://app@<gcp>:6379"
-    "redis-endpoints-admin"      = "STATEMIG_ENDPOINTS for statemig and the sync worker (admin user)"
+    "tailscale-authkey-mgmt" = "Tailscale auth key (tag:mgmt) for the platform gateway"
+    "cloudflare-api-token"   = "Cloudflare API token for the traffic service (LB edit, pool health read)"
+    "github-client-secret"   = "GitHub OAuth app secret for console login"
+    "redis-endpoints-proxy"  = "STATEMIG_ENDPOINTS for the Redis proxy: aws=redis://app@<aws>:6379,gcp=redis://app@<gcp>:6379"
+    "redis-endpoints-admin"  = "STATEMIG_ENDPOINTS for statemig and the sync worker (admin user)"
   }
 }
 resource "random_password" "generated" {
@@ -169,9 +168,21 @@ resource "aws_secretsmanager_secret_version" "external" {
     ignore_changes = [secret_string]
   }
 }
+# The platform tunnel's token comes straight from Cloudflare (cloudflare.tf).
+resource "aws_secretsmanager_secret" "tunnel_platform" {
+  name                    = "foxtrot/platform/cloudflare-tunnel-platform"
+  description             = "Cloudflare tunnel token for the platform (console); written by Terraform"
+  recovery_window_in_days = 0
+}
+resource "aws_secretsmanager_secret_version" "tunnel_platform" {
+  secret_id     = aws_secretsmanager_secret.tunnel_platform.id
+  secret_string = data.cloudflare_zero_trust_tunnel_cloudflared_token.platform.token
+}
+
 locals {
   secret_arn = merge(
     { for k, s in aws_secretsmanager_secret.generated : k => s.arn },
     { for k, s in aws_secretsmanager_secret.external : k => s.arn },
+    { "cloudflare-tunnel-platform" = aws_secretsmanager_secret.tunnel_platform.arn },
   )
 }

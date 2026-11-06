@@ -19,12 +19,15 @@
 - 서비스는 모두 태스크 1개, `minimumHealthyPercent=0`(단일 기록자).
 - 비밀: 서비스 간 토큰은 Terraform이 생성. 외부 값은 `UNSET`으로 자리만 만들고 담당자가 채움.
 
+## Cloudflare (Terraform 관리)
+
+`cloudflare.tf`가 플랫폼 터널 `foxtrot-platform`, 라우팅(`platform.foxtrot.live` → `http://console.internal:80`), DNS CNAME을 만들고 터널 토큰을 Secrets Manager `foxtrot/platform/cloudflare-tunnel-platform`에 넣습니다. 게이트웨이의 `foxtrot-tunnel` 서비스가 그 토큰으로 cloudflared를 실행합니다. Terraform 실행 때 Cloudflare 토큰은 Secrets Manager `foxtrot/platform/cloudflare-iac-token`에서 읽어 `CLOUDFLARE_API_TOKEN`으로 넘깁니다(state에 남기지 않음). LB와 pool, 앱 터널(`foxtrot-traffic-aws`, `foxtrot-traffic-gcp`)은 트래픽 파트가 관리합니다.
+
 ## 담당자가 채울 비밀 (Secrets Manager `foxtrot/platform/*`)
 
 | 비밀 | 채우면 |
 |---|---|
 | `tailscale-authkey-mgmt` | 게이트웨이가 `tag:mgmt`로 tailnet 가입 (1분 안에 자동) |
-| `cloudflare-tunnel-platform` | 게이트웨이가 플랫폼 터널 실행. 터널의 공개 호스트를 `http://console.internal:80`으로 지정 |
 | `cloudflare-api-token` | 트래픽 서비스가 Cloudflare 호출. `traffic` 변수(zone/account/lb/pool ID)도 함께 설정 후 apply |
 | `github-client-secret` | 콘솔 로그인. `github_client_id`, `github_allowed_ids`, `console_url` 변수와 함께 apply 후 control-plane 재시작 |
 | `redis-endpoints-proxy`, `redis-endpoints-admin` | 앱 Redis 주소. 채운 뒤 `redis_enabled=true`로 apply |
@@ -46,4 +49,5 @@ TF_VAR_gcp_project_id=foxtrot-513413 terraform plan -out=platform.tfplan && terr
 
 - Terraform 관리 리소스 209개. ECS 서비스 6개 RUNNING, 상태 검사 있는 서비스는 모두 HEALTHY. Redis 3개는 꺼 둠.
 - 게이트웨이에서 내부 이름으로 확인: control-plane·db-proxy(HTTPS)·traffic·provisioner·console `200`, console `/api/health` → control-plane `200`, object-migration 토큰 없이 `401`, PgBouncer 6432 열림.
-- 아직 확인 못 함: Tailscale 경유 앱 VM 연결, 콘솔 공개 주소, GitHub 로그인, 실제 이전 (외부 비밀이 비어 있음).
+- 공개 주소: `https://platform.foxtrot.live` 200, `/api/health` 200, `/api/auth/github/start` → GitHub(우리 Client ID, 콜백) 302, `/api/internal/*` 404.
+- 아직 확인 못 함: 브라우저 GitHub 로그인 완료, Tailscale 경유 앱 VM 연결(키 미입력), 트래픽 서비스의 Cloudflare 호출, 실제 이전.
