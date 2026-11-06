@@ -55,7 +55,7 @@ resources:
     policy: {rollbackMode: REVERSE_REQUIRED, maxQuiesceSeconds: 30}
 
 adapters:
-  database: {url: "https://db-migration.internal:8080", tokenSecret: "env:DB_ADAPTER_TOKEN", verify: "/tmp/foxtrot-ca.pem"}
+  database: {url: "https://db-proxy.internal:8080", tokenSecret: "env:DB_ADAPTER_TOKEN", verify: "/tmp/foxtrot-ca.pem"}
   redis: {url: "http://redis-migrator.internal:8090", tokenSecret: "env:REDIS_ADAPTER_TOKEN"}
   object: {url: "http://object-migration.internal:8080", tokenSecret: "env:OBJECT_ADAPTER_TOKEN"}
 

@@ -14,15 +14,16 @@ locals {
 }
 
 # ---------------------------------------------------------------------------------------------
-# DB migration adaptor: API + worker (backend) and PgBouncer (pooler) in one task.
-# db-migration.internal:8080 (HTTPS API), db-proxy.internal:6432 (PgBouncer for app VMs).
+# DB migration adaptor: API + worker (backend) and PgBouncer (pooler) in one task, registered as
+# db-proxy.internal: 6432 PgBouncer for app VMs, 8080 HTTPS API for the control-plane. (Cloud Map
+# gives an ECS service one name, and its zone takes no extra records.)
 locals {
   db_runtime = {
     "db-runtime-users"       = jsonencode({ pooler_admin = random_password.generated["db-pgbouncer-admin-password"].result })
     "db-runtime-admin-dsn"   = "postgresql://pooler_admin:${random_password.generated["db-pgbouncer-admin-password"].result}@127.0.0.1:6432/pgbouncer?sslmode=verify-full&sslrootcert=/run/foxtrot/client.crt"
     "db-runtime-client-cert" = "${tls_locally_signed_cert.db.cert_pem}${local.ca_pem}"
     "db-runtime-client-key"  = tls_private_key.db.private_key_pem
-    "db-runtime-server-ca"   = file("${path.module}/rds-global-bundle.pem")
+    "db-runtime-server-ca"   = file("${path.module}/rds-ca-bundle.pem") # ap-northeast-2 RDS CAs (the global bundle exceeds the 64 KB secret limit)
   }
   db_registry = jsonencode({ databases = {}, bindings = {}, workloads = {}, tables = [], sequences = [] })
   db_env = {
@@ -61,7 +62,7 @@ resource "aws_secretsmanager_secret_version" "db_runtime" {
 
 module "db_migration" {
   source = "../../../modules/platform_service"
-  name   = "db-migration"
+  name   = "db-proxy"
   cpu    = 512
   memory = 1024
   containers = [
@@ -108,15 +109,6 @@ module "db_migration" {
   namespace_id       = local.svc.namespace_id
   log_group          = local.svc.log_group
   region             = local.svc.region
-}
-
-# db-proxy.internal is the same task as db-migration.internal (one Cloud Map name per service).
-resource "aws_route53_record" "db_proxy" {
-  zone_id = aws_service_discovery_private_dns_namespace.internal.hosted_zone
-  name    = "db-proxy.internal"
-  type    = "CNAME"
-  ttl     = 10
-  records = ["db-migration.internal"]
 }
 
 # ---------------------------------------------------------------------------------------------
