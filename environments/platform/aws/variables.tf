@@ -35,16 +35,18 @@ variable "gcp_project_id" {
 }
 variable "console_url" {
   type        = string
-  default     = "https://platform.foxtrot.invalid"
-  description = "콘솔 주소 (Cloudflare). GitHub 로그인 콜백과 Origin 검사에 씁니다. 도메인이 정해지면 바꿉니다."
+  default     = "https://platform.foxtrot.live"
+  description = "콘솔 주소 (DNS는 Cloudflare). GitHub 로그인 콜백(<주소>/api/auth/github/callback)과 Origin 검사에 씁니다."
 }
 variable "github_client_id" {
-  type    = string
-  default = ""
+  type        = string
+  default     = "Ov23liYMrR7123mf374C"
+  description = "org 소유 GitHub 앱의 Client ID (비밀 아님). secret은 Secrets Manager foxtrot/platform/github-client-secret"
 }
 variable "github_allowed_ids" {
-  type        = list(number)
-  default     = []
+  type = list(number)
+  # org 멤버 전원: dlacowns21, hyunsuhahaha, noeulnight, SuperSon7, yyoungjin
+  default     = [176018876, 76990163, 44047052, 121543941, 133024268]
   description = "콘솔 로그인을 허용할 GitHub 숫자 ID"
 }
 variable "redis_enabled" {
