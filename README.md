@@ -32,6 +32,8 @@ AI 추천 API/모델 호출, 사용자 승인 UI, apply 실행기, 실제 비용
 
 ## 먼저 볼 파일
 
+- [EC2 → GCE 전환·롤백 검증 기록](docs/compute-cloud-rehearsal.md) — 세션 요청 291건 성공, WebSocket·주문 확인, 임시 자원 정리
+- [Notion 팀 공유 요약](https://app.notion.com/p/410b7958f327817b97c3faba860ec22b) — 검증 결과와 다음 통합 작업
 - [COMPUTE 호출 방법](compute/README.md) — 컨트롤 플레인에서 계획 등록, 컨테이너 준비·기동, 결과 조회
 
 - [치이카와 LIVE PoC 연결](docs/demo-deployment.md) — Redis 이전 설정, 관리망 입력, DB 초기 권한과 WebSocket
