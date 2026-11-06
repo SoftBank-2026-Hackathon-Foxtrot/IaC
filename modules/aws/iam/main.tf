@@ -26,3 +26,18 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   role       = aws_iam_role.app.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
+
+# The VM pulls the app image from ECR and reads only the secrets this environment created.
+resource "aws_iam_role_policy_attachment" "ecr" {
+  role       = aws_iam_role.app.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+resource "aws_iam_role_policy" "secrets" {
+  count = length(var.secret_arns) > 0 ? 1 : 0
+  name  = "environment-secrets"
+  role  = aws_iam_role.app.id
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{ Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = var.secret_arns }]
+  })
+}

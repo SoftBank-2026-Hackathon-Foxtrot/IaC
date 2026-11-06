@@ -117,3 +117,23 @@ resource "aws_vpc_security_group_egress_rule" "cloudflare_tunnel" {
   to_port           = 7844
   tags              = var.tags
 }
+
+# Package mirrors are served over plain HTTP on some distributions.
+resource "aws_vpc_security_group_egress_rule" "http" {
+  security_group_id = aws_security_group.app.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  tags              = var.tags
+}
+# Cross-cloud replication: the target database (for example Cloud SQL) connects to this one.
+resource "aws_vpc_security_group_ingress_rule" "replication_db" {
+  for_each          = var.replication_cidrs
+  security_group_id = aws_security_group.db.id
+  cidr_ipv4         = each.value
+  ip_protocol       = "tcp"
+  from_port         = 5432
+  to_port           = 5432
+  tags              = var.tags
+}

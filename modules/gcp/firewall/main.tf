@@ -46,7 +46,7 @@ resource "google_compute_firewall" "data" {
   # 3307 is the Cloud SQL connector/proxy data connection port.
   allow {
     protocol = "tcp"
-    ports    = ["5432", "3307", "6378"]
+    ports    = ["5432", "3307", "6378", "6379"]
   }
   description = jsonencode(var.labels)
 }
@@ -90,6 +90,21 @@ resource "google_compute_firewall" "cloudflare_tunnel" {
   allow {
     protocol = "udp"
     ports    = ["7844"]
+  }
+  description = jsonencode(var.labels)
+}
+
+# Package mirrors (apt) are partly plain HTTP.
+resource "google_compute_firewall" "http" {
+  name                    = "${var.name}-http-out"
+  network                 = var.network_id
+  direction               = "EGRESS"
+  priority                = 1000
+  destination_ranges      = ["0.0.0.0/0"]
+  target_service_accounts = [var.app_service_account]
+  allow {
+    protocol = "tcp"
+    ports    = ["80"]
   }
   description = jsonencode(var.labels)
 }

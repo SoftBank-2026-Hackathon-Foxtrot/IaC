@@ -28,6 +28,7 @@ resource "google_compute_instance" "this" {
     enable-oslogin         = "TRUE"
     block-project-ssh-keys = "TRUE"
     serial-port-enable     = "FALSE"
+    startup-script         = var.startup_script
   }
   shielded_instance_config {
     enable_secure_boot          = true

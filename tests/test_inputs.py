@@ -82,13 +82,13 @@ class InputsTest(unittest.TestCase):
             inputs.merge_recommendation("aws", base, self.proposal({"compute_disk_gib":40}))
 
     def test_cidr_overlap_and_outside_vpc_rejected(self):
-        for cidr in ("10.20.0.0/24", "10.99.0.0/24"):
+        for cidr in ("10.10.0.0/24", "10.99.0.0/24"):
             base = self.base()
             base["network"]["private_subnet_cidrs"][0] = cidr
             with self.assertRaises(ValueError):
                 inputs.validate_config("aws", base)
         base = self.base("gcp")
-        base["network"]["service_range_address"] = "10.30.0.0"
+        base["network"]["service_range_address"] = "10.20.0.0"
         with self.assertRaises(ValueError):
             inputs.validate_config("gcp", base)
 

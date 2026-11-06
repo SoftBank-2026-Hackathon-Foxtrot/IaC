@@ -1,0 +1,111 @@
+#!/bin/bash
+# Boots the app on this VM: pulls the image from the cloud registry, prepares the database,
+# then runs the API, the queue workers and (optionally) cloudflared. Safe to run again.
+set -euo pipefail
+exec > >(tee -a /var/log/foxtrot-app.log) 2>&1
+echo "foxtrot boot $(date -u +%FT%TZ)"
+
+IMAGE='${image}'
+REGISTRY="$${IMAGE%%/*}"
+CONF=/etc/foxtrot
+mkdir -p "$CONF" && chmod 700 "$CONF"
+
+retry() { local n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 30 ] && return 1; sleep 10; done; }
+
+%{ if cloud == "aws" ~}
+command -v docker >/dev/null || retry dnf install -y docker
+secret() { aws secretsmanager get-secret-value --region '${region}' --secret-id "$1" --query SecretString --output text; }
+registry_login() { aws ecr get-login-password --region '${region}' | docker login --username AWS --password-stdin "$REGISTRY"; }
+%{ else ~}
+command -v docker >/dev/null || { retry apt-get update && retry apt-get install -y docker.io; }
+token() { curl -fsS -H 'Metadata-Flavor: Google' \
+  http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])'; }
+secret() { curl -fsS -H "Authorization: Bearer $(token)" "https://secretmanager.googleapis.com/v1/$1/versions/latest:access" \
+  | python3 -c 'import base64,json,sys; sys.stdout.write(base64.b64decode(json.load(sys.stdin)["payload"]["data"]).decode())'; }
+registry_login() { token | docker login --username oauth2accesstoken --password-stdin "https://$REGISTRY"; }
+%{ endif ~}
+systemctl enable --now docker
+retry registry_login
+retry docker pull "$IMAGE"
+
+# Secrets, read at boot from the cloud's secret store; never written into Terraform user data.
+APP_DB_PASSWORD="$(retry secret '${db.app_password_secret}')"
+%{ if db.admin_secret_format == "rds-json" ~}
+ADMIN_JSON="$(retry secret '${db.admin_secret}')"
+DB_ADMIN_USER="$(printf '%s' "$ADMIN_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["username"])')"
+DB_ADMIN_PASSWORD="$(printf '%s' "$ADMIN_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["password"])')"
+%{ else ~}
+DB_ADMIN_USER='${db.admin_user}'
+DB_ADMIN_PASSWORD="$(retry secret '${db.admin_secret}')"
+%{ endif ~}
+%{ if storage_secret != null ~}
+STORAGE_SECRET="$(retry secret '${storage_secret}')"
+%{ else ~}
+STORAGE_SECRET=""
+%{ endif ~}
+
+umask 077
+cat > "$CONF/common.env" <<'EOF'
+${common_env}
+EOF
+cat > "$CONF/api.env" <<'EOF'
+${api_env}
+EOF
+cat > "$CONF/worker.env" <<'EOF'
+${worker_env}
+EOF
+sed -i "s|__APP_DB_PASSWORD__|$APP_DB_PASSWORD|g; s|__STORAGE_SECRET__|$STORAGE_SECRET|g" "$CONF/common.env"
+%{ for name, ref in secret_env ~}
+printf '%s=%s\n' '${name}' "$(retry secret '${ref}')" >> "$CONF/common.env"
+%{ endfor ~}
+
+# Database: app role, grants and the app's schema. The admin password only lives in this file
+# for the one-shot container and is removed right after.
+cat > "$CONF/bootstrap_db.py" <<'EOF'
+${bootstrap_py}
+EOF
+{
+  printf 'DB_HOST=%s\nDB_PORT=%s\nDB_NAME=%s\n' '${db.host}' '${db.port}' '${db.name}'
+  printf 'DB_ADMIN_USER=%s\nDB_ADMIN_PASSWORD=%s\n' "$DB_ADMIN_USER" "$DB_ADMIN_PASSWORD"
+  printf 'APP_DB_USER=%s\nAPP_DB_PASSWORD=%s\n' '${db.app_user}' "$APP_DB_PASSWORD"
+} > "$CONF/bootstrap.env"
+DB_STATE="$(docker run --rm --network host --env-file "$CONF/bootstrap.env" -e PYTHONPATH=/srv -w /srv \
+  -v "$CONF/bootstrap_db.py:/bootstrap_db.py:ro" "$IMAGE" python /bootstrap_db.py | tail -n 1)"
+rm -f "$CONF/bootstrap.env"
+unset DB_ADMIN_PASSWORD ADMIN_JSON
+echo "database: $DB_STATE"
+
+run() {  # name, env file, command...
+  local name="$1" envfile="$2"; shift 2
+  docker rm -f "$name" >/dev/null 2>&1 || true
+  docker run -d --name "$name" --restart unless-stopped --network host --stop-timeout 35 \
+    --env-file "$CONF/common.env" --env-file "$envfile" "$IMAGE" "$@"
+}
+run app-api "$CONF/api.env" uvicorn app.main:app --host 0.0.0.0 --port ${port} --workers ${api_workers} \
+  --timeout-keep-alive 120 --ws-max-size 4096
+%{ for i in range(worker_count) ~}
+run app-worker-${i + 1} "$CONF/worker.env" python -m app.worker --name w${i + 1}${i == 0 ? " --reconciler" : ""}
+%{ endfor ~}
+
+%{ if seed_demo_data ~}
+if [ "$DB_STATE" = "EMPTY" ] && [ ! -f "$CONF/seeded" ]; then
+  for _ in $(seq 1 60); do
+    if curl -fsS -X POST "http://127.0.0.1:${port}/seed?close_in_s=${seed_close_in_s}" >/dev/null; then
+      touch "$CONF/seeded"; echo "demo data seeded"; break
+    fi
+    sleep 5
+  done
+fi
+%{ endif ~}
+
+%{ if tunnel_token_secret != null ~}
+TUNNEL_TOKEN="$(retry secret '${tunnel_token_secret}')"
+printf 'TUNNEL_TOKEN=%s\n' "$TUNNEL_TOKEN" > "$CONF/tunnel.env"
+unset TUNNEL_TOKEN
+docker rm -f cloudflared >/dev/null 2>&1 || true
+retry docker pull '${cloudflared_image}'
+docker run -d --name cloudflared --restart unless-stopped --network host --env-file "$CONF/tunnel.env" \
+  '${cloudflared_image}' tunnel --no-autoupdate run
+%{ endif ~}
+echo "foxtrot boot done $(date -u +%FT%TZ)"
