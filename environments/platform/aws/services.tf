@@ -407,6 +407,8 @@ module "control_plane" {
     })
     secrets = merge(local.otel_secrets, var.security_review == null ? {} : {
       SECURITY_GCP_CREDENTIALS = var.security_review.gcp_credentials_secret
+      }, try(var.security_review.gcp_apply_credentials_secret, null) == null ? {} : {
+      SECURITY_GCP_APPLY_CREDENTIALS = var.security_review.gcp_apply_credentials_secret
       }, {
       OBSERVATION_TOKEN     = local.secret_arn["observation-token"]
       TRAFFIC_SERVICE_TOKEN = local.secret_arn["traffic-service-token"]
