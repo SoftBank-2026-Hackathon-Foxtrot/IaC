@@ -268,6 +268,11 @@ locals {
     deletionProtection  = false
     forceDestroyStorage = true
     expiresInDays       = 30
+    # Apps reach Redis and the object route through the platform (DB through PgBouncer comes next).
+    appEnv = {
+      REDIS_URL               = "redis://redis-proxy.internal:6379"
+      OBJECT_MIGRATION_SERVER = "http://object-migration.internal:8080"
+    }
     clouds = {
       aws = merge(local.provisioner_baseline.aws, {
         accounts      = [data.aws_caller_identity.current.account_id]
