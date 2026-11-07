@@ -13,3 +13,7 @@ output "private_ip" {
 output "source_dest_check" {
   value = aws_instance.this.source_dest_check
 }
+
+output "primary_network_interface_id" {
+  value = aws_instance.this.primary_network_interface_id
+}
