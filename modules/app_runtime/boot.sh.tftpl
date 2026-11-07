@@ -12,14 +12,24 @@ mkdir -p "$CONF" && chmod 700 "$CONF"
 
 retry() { local n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 30 ] && return 1; sleep 10; done; }
 
+%{ if cloud == "gcp" && tailscale != null ~}
+# After a reboot tailscaled starts before this script and can hold /etc/resolv.conf with no
+# upstream resolver, so nothing outside the tailnet resolves. Start again from the VPC resolver;
+# join_tailnet below puts MagicDNS (and the platform's *.internal names) back on top of it.
+if command -v tailscale >/dev/null; then
+  tailscale down || true
+  printf 'nameserver 169.254.169.254\nsearch google.internal\n' > /etc/resolv.conf
+fi
+%{ endif ~}
 %{ if cloud == "aws" ~}
 command -v docker >/dev/null || retry dnf install -y docker
 secret() { aws secretsmanager get-secret-value --region '${region}' --secret-id "$1" --query SecretString --output text; }
 registry_login() { aws ecr get-login-password --region '${region}' | docker login --username AWS --password-stdin "$REGISTRY"; }
 %{ else ~}
 command -v docker >/dev/null || { retry apt-get update && retry apt-get install -y docker.io; }
+# By IP: the tailnet sends every *.internal name, metadata.google.internal included, to the platform.
 token() { curl -fsS -H 'Metadata-Flavor: Google' \
-  http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token \
+  http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])'; }
 secret() { curl -fsS -H "Authorization: Bearer $(token)" "https://secretmanager.googleapis.com/v1/$1/versions/latest:access" \
   | python3 -c 'import base64,json,sys; sys.stdout.write(base64.b64decode(json.load(sys.stdin)["payload"]["data"]).decode())'; }
