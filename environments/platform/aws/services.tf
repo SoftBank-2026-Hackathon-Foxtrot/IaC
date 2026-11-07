@@ -214,8 +214,12 @@ module "object_migration" {
       DYNAMODB_TABLE  = aws_dynamodb_table.pk_sk["foxtrot-object-migration"].name
       DYNAMODB_REGION = var.region
       ENGINE          = "rclone"
-      # No GCP_PROJECT: GCS sources (the reverse sync after a cutover) are mirrored every round
-      # instead of followed through Pub/Sub, which the object service account has no role for.
+      # GCS sources (a GCP → AWS run, and the reverse sync after a cutover) are followed through
+      # Pub/Sub topics in the platform project, created with the object service account's key
+      # (GCP_CREDENTIALS). Without them a GCS source is mirrored every round, and a mirror round
+      # that copies nothing never comes while the app keeps writing receipts.
+      GCP_PROJECT      = var.gcp_project_id
+      GCP_CREDENTIALS  = "env:GCS"
       OBJECT_RESOURCES = var.object_resources
     })
     # GCS buckets use ref "env:GCS": the platform's object service account key.

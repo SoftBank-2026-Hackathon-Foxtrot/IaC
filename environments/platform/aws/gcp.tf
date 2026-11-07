@@ -3,7 +3,7 @@
 locals {
   gcp_accounts = {
     db          = { roles = ["roles/cloudsql.viewer"], description = "DB adaptor: read Cloud SQL instance metadata" }
-    object      = { roles = ["roles/storage.admin"], description = "object-migration: copy into and route GCS buckets" }
+    object      = { roles = ["roles/storage.admin", "roles/pubsub.editor"], description = "object-migration: copy into and route GCS buckets, follow GCS sources through Pub/Sub" }
     provisioner = { roles = ["roles/editor", "roles/resourcemanager.projectIamAdmin", "roles/iam.serviceAccountAdmin", "roles/secretmanager.admin", "roles/servicenetworking.networksAdmin"], description = "provisioner: create app environments" }
   }
   gcp_roles = merge([for k, v in local.gcp_accounts : { for r in v.roles : "${k}:${r}" => { account = k, role = r } }]...)
@@ -19,6 +19,17 @@ resource "google_project_iam_member" "platform" {
   project  = var.gcp_project_id
   role     = each.value.role
   member   = "serviceAccount:${google_service_account.platform[each.value.account].email}"
+}
+# A GCS bucket notification is published by the project's Cloud Storage service agent. With the
+# publisher role on the project it can post to every object-migration topic, so the server need
+# not set an IAM policy per topic (pubsub.editor cannot; the server tolerates that refusal).
+data "google_storage_project_service_account" "gcs" {
+  project = var.gcp_project_id
+}
+resource "google_project_iam_member" "gcs_agent_publisher" {
+  project = var.gcp_project_id
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:${data.google_storage_project_service_account.gcs.email_address}"
 }
 resource "google_service_account_key" "platform" {
   for_each           = local.gcp_accounts
