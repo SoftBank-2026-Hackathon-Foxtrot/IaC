@@ -142,3 +142,11 @@ python tools/render_inputs.py render --cloud aws \
 실제 PLAN/APPLY와 COMPUTE 준비 결과를 컨트롤 플레인으로 보고하는 방법은 [관측 연결](docs/migration-observability.md)을 참고하세요.
 
 온프렘 실행 설정: [개인 PC 한 대 준비](docs/on-prem-setup.md) · [v2 API](contracts/onprem.openapi.yaml). 기존 AWS/GCP v1 API와 별도로 Ansible 경로를 제공한다.
+
+### Application system telemetry
+
+`appTelemetry` sets the OTLP HTTP `endpoint`, server-managed `applicationId` (from the loaded migration seed; no hardcoded demo name), and `headersSecrets` (`aws` Secrets Manager ARN / `gcp` Secret Manager resource). Platform Terraform copies the exporter header secret into GCP and injects both references. App requests cannot override OTEL settings.
+
+The provisioner injects `OTEL_OWNER_ID` from the persisted organization and `OTEL_DEPLOYMENT_ID` from the deployment record. The updated demo image collects its container cgroup CPU, memory and disk I/O. Docker VM and on-prem app containers use an isolated network; no host agent or host filesystem mount is installed. On-prem exporter credentials come from the control-plane OTLP environment or `appTelemetry.endpoint` / `headersEnv`; nodes must reach the collector privately.
+
+Managed Fargate / Cloud Run app containers share a network namespace within one app instance. Their config sets `OTEL_NETWORK_SCOPE=app-instance`; only the API container reports network counters, which include its app workers and tunnel. CPU/memory/I/O remain container-scoped; missing kernel counters or resource limits remain missing. Shared filesystem capacity is not reported. Existing deployments need the updated image and configuration; changing this repository does not redeploy them.

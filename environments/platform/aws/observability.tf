@@ -73,7 +73,7 @@ locals {
     global  = { evaluation_interval = "15s" }
     storage = { tsdb = { out_of_order_time_window = "5m" } }
     otlp = {
-      promote_resource_attributes = ["service.name", "service.instance.id", "foxtrot.module"]
+      promote_resource_attributes = ["service.name", "service.instance.id", "foxtrot.module", "application.id", "deployment.environment.name", "host.name", "measurement.scope", "foxtrot.owner.id", "deployment.id", "app.role", "network.scope"]
       translation_strategy        = "UnderscoreEscapingWithSuffixes"
     }
   })

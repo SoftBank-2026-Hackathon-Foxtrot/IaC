@@ -8,4 +8,12 @@ otlp:
     - service.name
     - service.instance.id
     - foxtrot.module
+    - application.id
+    - deployment.environment.name
+    - host.name
+    - measurement.scope
+    - foxtrot.owner.id
+    - deployment.id
+    - app.role
+    - network.scope
   translation_strategy: UnderscoreEscapingWithSuffixes
