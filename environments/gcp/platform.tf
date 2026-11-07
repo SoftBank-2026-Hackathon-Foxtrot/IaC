@@ -29,7 +29,7 @@ provider "google" {
   zone    = var.zone
 }
 resource "google_project_service" "required" {
-  for_each           = toset(["compute.googleapis.com", "iam.googleapis.com", "sqladmin.googleapis.com", "redis.googleapis.com", "servicenetworking.googleapis.com", "storage.googleapis.com", "logging.googleapis.com", "monitoring.googleapis.com", "oslogin.googleapis.com", "artifactregistry.googleapis.com", "secretmanager.googleapis.com"])
+  for_each           = toset(["compute.googleapis.com", "iam.googleapis.com", "sqladmin.googleapis.com", "redis.googleapis.com", "servicenetworking.googleapis.com", "storage.googleapis.com", "logging.googleapis.com", "monitoring.googleapis.com", "oslogin.googleapis.com", "artifactregistry.googleapis.com", "secretmanager.googleapis.com", "cloudresourcemanager.googleapis.com"])
   project            = var.project_id
   service            = each.value
   disable_on_destroy = false

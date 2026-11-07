@@ -28,7 +28,7 @@ provider "google" {
 }
 
 resource "google_project_service" "required" {
-  for_each           = toset(["artifactregistry.googleapis.com", "secretmanager.googleapis.com"])
+  for_each           = toset(["artifactregistry.googleapis.com", "secretmanager.googleapis.com", "cloudresourcemanager.googleapis.com", "servicenetworking.googleapis.com"])
   service            = each.value
   disable_on_destroy = false
 }
