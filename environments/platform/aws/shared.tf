@@ -135,7 +135,7 @@ resource "aws_dynamodb_table" "db_operator" {
 # Tokens between platform services: generated here.
 locals {
   generated = ["db-adapter-token", "redis-admin-token", "object-adapter-token", "traffic-service-token",
-  "workload-token", "provisioner-token", "observation-token", "db-pgbouncer-admin-password"]
+  "workload-token", "provisioner-token", "observation-token", "db-pgbouncer-admin-password", "otel-ingest-token"]
   # Values that come from other systems: created with the placeholder UNSET; owners overwrite
   # them (Terraform ignores later changes). Services treat UNSET as "not configured".
   external = {
