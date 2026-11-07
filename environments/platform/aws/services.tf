@@ -256,7 +256,7 @@ module "traffic" {
       CF_ZONE_ID      = var.traffic.zone_id
       CF_ACCOUNT_ID   = var.traffic.account_id
       CF_LB_ID        = var.traffic.lb_id
-      CF_POOL_IDS     = jsonencode(local.traffic_pool_ids)
+      CF_POOL_IDS     = var.traffic.pool_ids
       TRAFFIC_DB_PATH = "/var/lib/foxtrot/traffic/traffic.db"
     })
     secrets = merge(local.otel_secrets, { TRAFFIC_SERVICE_TOKEN = local.secret_arn["traffic-service-token"], CF_API_TOKEN = local.secret_arn["cloudflare-api-token"] })
