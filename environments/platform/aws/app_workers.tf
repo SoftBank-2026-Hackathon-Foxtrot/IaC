@@ -49,9 +49,11 @@ module "application_workers" {
 }
 
 locals {
-  configured_seed = yamldecode(file("${path.module}/seed.yaml"))
+  # The seed with values only Terraform knows filled in.
+  seed_text       = replace(file("${path.module}/seed.yaml"), "__CHIIKAWA_CLOUDSQL_SECRET_REF__", aws_secretsmanager_secret.chiikawa_cloudsql_operator.arn)
+  configured_seed = yamldecode(local.seed_text)
   control_workers = try(module.application_workers[local.configured_seed.application].application, null)
-  control_seed_yaml = local.control_workers == null ? file("${path.module}/seed.yaml") : yamlencode(merge(local.configured_seed, {
+  control_seed_yaml = local.control_workers == null ? local.seed_text : yamlencode(merge(local.configured_seed, {
     adapters = merge(local.configured_seed.adapters, {
       database = merge(local.configured_seed.adapters.database, { url = local.control_workers.database.url })
       redis    = merge(local.configured_seed.adapters.redis, { url = local.control_workers.redis.url })

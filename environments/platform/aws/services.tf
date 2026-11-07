@@ -30,7 +30,9 @@ locals {
     "db-runtime-admin-dsn"   = "postgresql://pooler_admin:${random_password.generated["db-pgbouncer-admin-password"].result}@127.0.0.1:6432/pgbouncer?sslmode=verify-full&sslrootcert=/run/foxtrot/client.crt"
     "db-runtime-client-cert" = "${tls_locally_signed_cert.db.cert_pem}${local.ca_pem}"
     "db-runtime-client-key"  = tls_private_key.db.private_key_pem
-    "db-runtime-server-ca"   = file("${path.module}/rds-ca-bundle.pem") # ap-northeast-2 RDS CAs (the global bundle exceeds the 64 KB secret limit)
+    # ap-northeast-2 RDS CAs (the global bundle exceeds the 64 KB secret limit) and the chiikawa
+    # Cloud SQL instance's CA (cloudsql_target.tf).
+    "db-runtime-server-ca" = "${file("${path.module}/rds-ca-bundle.pem")}${local.cloudsql_ca_pem}"
   }
   db_registry = jsonencode({ databases = {}, bindings = {}, workloads = {}, tables = [], sequences = [] })
   db_env = {

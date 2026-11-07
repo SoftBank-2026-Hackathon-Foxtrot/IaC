@@ -63,7 +63,8 @@ def ipv4(cidr):
 
 
 APP_KEYS = {"image", "port", "api_workers", "worker_count", "served_by", "seed_demo_data", "seed_close_in_s",
-            "env", "api_env", "worker_env", "secret_env", "tunnel_secret", "cloudflared_image", "health_path"}
+            "env", "api_env", "worker_env", "secret_env", "tunnel_secret", "cloudflared_image", "health_path",
+            "db_password_secret"}
 REGISTRY = {"aws": r"^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/", "gcp": r"^[a-z0-9-]+-docker\.pkg\.dev/"}
 
 

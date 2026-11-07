@@ -17,6 +17,9 @@ variable "app" {
     secret_env        = optional(map(string), {}) # NAME => projects/<p>/secrets/<name>
     tunnel_secret     = optional(string)          # projects/<p>/secrets/<name> of a Cloudflare tunnel token
     cloudflared_image = optional(string, "cloudflare/cloudflared:2024.12.2")
+    # The app role's password from this secret instead of the environment's own: a database the
+    # app moves to keeps the same login (projects/<p>/secrets/<name>).
+    db_password_secret = optional(string)
   })
   default = null
   validation {
@@ -51,7 +54,7 @@ locals {
     db_admin = random_password.db_admin.result
     storage  = module.iam.hmac_secret
   }
-  extra_secret_refs = merge(try(var.app.secret_env, {}), try(var.app.tunnel_secret, null) == null ? {} : { TUNNEL = var.app.tunnel_secret })
+  extra_secret_refs = merge(try(var.app.db_password_secret, null) == null ? {} : { APP_DB_SHARED = var.app.db_password_secret }, try(var.app.secret_env, {}), try(var.app.tunnel_secret, null) == null ? {} : { TUNNEL = var.app.tunnel_secret })
 }
 
 resource "random_password" "app_db" {
@@ -121,7 +124,7 @@ module "app_runtime" {
     port                = 5432
     name                = var.database_name
     app_user            = local.app_db_user
-    app_password_secret = google_secret_manager_secret.app_db.id
+    app_password_secret = coalesce(try(var.app.db_password_secret, null), google_secret_manager_secret.app_db.id)
     admin_secret        = google_secret_manager_secret.db_admin.id
     admin_secret_format = "plain"
     admin_user          = module.cloud_sql.admin_user
