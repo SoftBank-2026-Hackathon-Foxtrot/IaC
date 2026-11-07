@@ -4,3 +4,5 @@
 **/*.tfplan
 provisioner/config.json
 **/__pycache__
+.onprem-local
+.venv
