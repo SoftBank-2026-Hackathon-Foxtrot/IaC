@@ -18,7 +18,7 @@
 
 ```bash
 python3.12 -m venv .venv
-.venv/bin/pip install -r requirements-onprem.txt
+.venv/bin/pip install -r requirements-onprem.txt -r requirements-observability.txt
 export PATH="$PWD/.venv/bin:$PATH"
 docker pull postgres:17-bookworm
 docker pull valkey/valkey:8.1

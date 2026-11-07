@@ -51,7 +51,7 @@ variable "github_allowed_ids" {
 }
 variable "redis_enabled" {
   type        = bool
-  default     = false
+  default     = true
   description = "Redis 프록시·statemig·sync worker 실행. 프록시는 시작할 때 원본·대상 Redis에 닿아야 하므로 앱 환경과 redis-endpoints 비밀이 준비된 뒤 켭니다."
 }
 variable "object_resources" {
@@ -67,5 +67,32 @@ variable "traffic" {
     lb_id      = optional(string, "")
     pool_ids   = optional(string, "")
   })
-  default = {}
+  # app.foxtrot.live load balancer and its two pools (IDs are not secret).
+  default = {
+    zone_id    = "a347c7267257bd2d1b3fe35d0d62ac72"
+    account_id = "3d6694c353d2e0519e3215805b763743"
+    lb_id      = "6bf4a03e3d63cb3da4a19e6d0c69a606"
+    pool_ids   = "{\"aws\":\"b26f0a79ed2d63568022f5b0ffd2b00d\",\"gcp\":\"c02ba1a4acbbbb702fd2f67d6b6dc6a4\"}"
+  }
+}
+
+variable "redis_endpoints" {
+  description = "Redis 프록시 백엔드: 이름 => redis:// 주소 (첫 항목이 처음 활성). 사설망(Tailscale)으로 닿는 앱 환경의 Redis"
+  type        = map(string)
+  # chiikawa: AWS ElastiCache (source) and GCP Memorystore (target), both reached over the tailnet.
+  default = {
+    aws = "redis://chiikawa-aws-3e3d-cache.nea7q9.ng.0001.apn2.cache.amazonaws.com:6379"
+    gcp = "redis://10.21.107.99:6379"
+  }
+}
+
+variable "observability" {
+  description = "Private OTEL stack from observability/compose.yaml. Headers secret contains Authorization=Bearer%20<module-token>. Null disables SDK export."
+  type = object({
+    endpoint           = string
+    headers_secret_arn = string
+    prometheus_url     = string
+    tempo_url          = string
+  })
+  default = null
 }

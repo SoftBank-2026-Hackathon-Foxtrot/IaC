@@ -48,10 +48,11 @@ class ReadinessLifecycleTest(unittest.TestCase):
     drain = helpers.ServiceTest.drain
 
     def test_reporting_failure_does_not_change_successful_deployment(self):
-        self.service.config = {**self.service.config, "observations": {"controlPlaneUrl": "http://cp.internal:8000"}}
-        with patch.dict("os.environ", {"OBSERVATION_TOKEN": "test-secret"}), patch(
-            "tools.report_observations.request", side_effect=URLError("unavailable")
-        ):
+        from contextlib import nullcontext
+        telemetry = Mock(enabled=True)
+        telemetry.operation.return_value = nullcontext(Mock())
+        telemetry.snapshot.side_effect = URLError("test-secret")
+        with patch("provisioner.service.get_telemetry", return_value=telemetry):
             _, created = self.service.create(body(workflowId="workflow-123"))
             self.drain()
         env = self.service.get(created["environmentId"])

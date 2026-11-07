@@ -16,6 +16,7 @@ output "script" {
     api_env             = local.lines.api
     worker_env          = local.lines.worker
     bootstrap_py        = file("${path.module}/bootstrap_db.py")
+    tailscale           = var.tailscale
   })
 }
 output "app_env_keys" {

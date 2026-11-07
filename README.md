@@ -91,7 +91,7 @@ docs/                   # 설계·플랫폼 계약·운영 절차
 Terraform `>= 1.10, < 2`, Python `>= 3.10` 필요. 검증에 사용한 Terraform은 `1.13.5`이며 provider 버전은 각 root의 lock 파일에 고정합니다.
 
 ```bash
-python -m pip install -r requirements-contracts.txt
+python -m pip install -r requirements-contracts.txt -r requirements-onprem.txt -r requirements-observability.txt
 python -m unittest discover -s tests -v
 terraform fmt -check -recursive
 terraform -chdir=environments/aws init -backend=false
