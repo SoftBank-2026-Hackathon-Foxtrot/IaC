@@ -92,6 +92,13 @@ class SpecTest(unittest.TestCase):
             with self.subTest(b=b), self.assertRaises(spec.RequestError):
                 self.render(b)
 
+    def test_platform_app_env_is_the_default(self):
+        config = json.loads(json.dumps(CONFIG))
+        config["appEnv"] = {"REDIS_URL": "redis://redis-proxy.internal:6379", "OBJECT_MIGRATION_SERVER": "http://object-migration.internal:8080"}
+        tf = spec.render(spec.parse(body(app={"env": {"REDIS_URL": "redis://mine:6379"}}), CATALOG, config), CATALOG, config, "a1b2", TODAY)
+        self.assertEqual(tf["app"]["env"]["REDIS_URL"], "redis://mine:6379")
+        self.assertEqual(tf["app"]["env"]["OBJECT_MIGRATION_SERVER"], "http://object-migration.internal:8080")
+
     def test_tailscale_comes_from_the_server_config(self):
         config = json.loads(json.dumps(CONFIG))
         config["clouds"]["gcp"]["tailscale"] = {"authKeySecret": "projects/p/secrets/foxtrot-tailscale-authkey-gcp"}

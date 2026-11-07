@@ -51,6 +51,34 @@ resource "aws_secretsmanager_secret_version" "app_db" {
   secret_string = random_password.app_db.result
 }
 
+# What the platform's DB migration adaptor reads for this database (its catalog's secret_ref):
+# admin and replication DSNs with TLS verified against the CA the adaptor writes at
+# /run/foxtrot/server-ca.crt, and the app role's password that PgBouncer serves the app with.
+# Named under foxtrot/ so the adaptor's task role can read it. The admin password comes from the
+# RDS-managed secret; if RDS rotates it, re-apply this environment to refresh the DSNs.
+data "aws_secretsmanager_secret_version" "rds_master" {
+  secret_id = module.rds.master_secret_arn
+}
+locals {
+  rds_master = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)
+  rds_admin_dsn = format("postgresql://%s:%s@%s:%d/%s?sslmode=verify-full&sslrootcert=/run/foxtrot/server-ca.crt",
+  urlencode(local.rds_master.username), urlencode(local.rds_master.password), module.rds.address, module.rds.port, var.database_name)
+}
+resource "aws_secretsmanager_secret" "db_operator" {
+  name                    = "foxtrot/app/${var.deployment_id}/db-operator"
+  description             = "DB migration adaptor credentials for ${var.deployment_id}"
+  recovery_window_in_days = 0
+  tags                    = merge(module.metadata.common, { component = "database" })
+}
+resource "aws_secretsmanager_secret_version" "db_operator" {
+  secret_id = aws_secretsmanager_secret.db_operator.id
+  secret_string = jsonencode({
+    adminDsn       = local.rds_admin_dsn
+    replicationDsn = local.rds_admin_dsn
+    writerPassword = random_password.app_db.result
+  })
+}
+
 module "app_runtime" {
   count  = var.app == null ? 0 : 1
   source = "../../modules/app_runtime"

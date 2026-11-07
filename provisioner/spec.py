@@ -92,6 +92,10 @@ def render(req: dict, catalog: dict, config: dict, suffix: str, today: dt.date) 
     for key, value in req["app"].items():
         app[APP_FIELDS[key]] = value
     app["image"] = image
+    # Platform defaults (server config "appEnv"): the app reaches its stores through the
+    # platform's proxies so a migration can swap what is behind them. Request env wins.
+    if config.get("appEnv"):
+        app["env"] = {**config["appEnv"], **app.get("env", {})}
 
     tfvars = copy.deepcopy(cloud_conf["baseline"])
     target = req["target"]
