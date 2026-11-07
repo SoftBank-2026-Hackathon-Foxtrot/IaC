@@ -135,13 +135,14 @@ module "redis_proxy" {
   desired_count = local.redis_count
   efs           = { state = { file_system_id = aws_efs_file_system.state.id, access_point_id = aws_efs_access_point.dir["redis"].id } }
   containers = [{
-    name        = "proxy"
-    image       = local.image["redis-proxy"]
-    entryPoint  = ["statemig-proxy"]
-    ports       = [6379, 7000]
-    environment = { STATEMIG_CONTROL_FILE = "/state/control.json" }
-    secrets     = merge(local.redis_token, { STATEMIG_ENDPOINTS = local.secret_arn["redis-endpoints-proxy"] })
-    mounts      = { state = "/state" }
+    name       = "proxy"
+    image      = local.image["redis-proxy"]
+    entryPoint = ["statemig-proxy"]
+    ports      = [6379, 7000]
+    environment = merge({ STATEMIG_CONTROL_FILE = "/state/control.json" },
+    length(var.redis_allowed_commands) > 0 ? { STATEMIG_ALLOWED_COMMANDS = join(",", var.redis_allowed_commands) } : {})
+    secrets = merge(local.redis_token, { STATEMIG_ENDPOINTS = local.secret_arn["redis-endpoints-proxy"] })
+    mounts  = { state = "/state" }
   }]
   cluster_id         = local.svc.cluster_id
   subnet_ids         = local.svc.subnet_ids

@@ -86,6 +86,29 @@ variable "redis_endpoints" {
   }
 }
 
+variable "redis_endpoint_auth" {
+  description = "AUTH가 필요한 Redis 백엔드(온프렘 Valkey 등): redis_endpoints의 이름 => 계정. 비밀번호는 Secrets Manager ARN에서 읽는다(온프렘 handoff의 appCredentialRef, adminCredentialRef). 프록시는 앱 계정, sync worker와 statemig는 관리자 계정으로 붙는다"
+  type = map(object({
+    app_password_secret   = string
+    admin_password_secret = string
+    app_user              = optional(string, "app")
+    admin_user            = optional(string, "default")
+  }))
+  default = {}
+}
+
+variable "redis_allowed_commands" {
+  description = <<-EOT
+    Redis 프록시의 앱 명령 목록(STATEMIG_ALLOWED_COMMANDS). 비어 있으면 끔. 켜면 목록 밖 명령은 NOPERM으로 거부하고,
+    백엔드 등록 때 이 명령들만 비교한다. 엔진이나 버전이 다른 Redis(ElastiCache 7.1, Memorystore 7.0, Valkey 8) 사이를
+    옮길 때 필요하다. 데모 앱 코드에서 찾은 후보(실제 실행으로 확인 전):
+    get set del expire incr ping select multi exec discard zadd xadd xack xpending xgroup xreadgroup xautoclaim
+    evalsha eval script publish subscribe unsubscribe
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "observability" {
   description = "Private OTEL stack from observability/compose.yaml. Headers secret contains Authorization=Bearer%20<module-token>. Null disables SDK export."
   type = object({
