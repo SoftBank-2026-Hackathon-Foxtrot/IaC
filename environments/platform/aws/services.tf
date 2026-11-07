@@ -229,7 +229,7 @@ module "object_migration" {
       # Buckets of app environments (foxtrot-*) on the AWS side.
       { Effect = "Allow", Resource = ["arn:aws:s3:::foxtrot-*", "arn:aws:s3:::foxtrot-*/*"], Action = [
       "s3:ListBucket", "s3:GetBucketLocation", "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:GetBucketNotification", "s3:PutBucketNotification"] },
-      { Effect = "Allow", Resource = "*", Action = ["sqs:CreateQueue", "sqs:DeleteQueue", "sqs:GetQueueAttributes", "sqs:SetQueueAttributes", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueUrl"] },
+      { Effect = "Allow", Resource = "*", Action = ["sqs:CreateQueue", "sqs:DeleteQueue", "sqs:GetQueueAttributes", "sqs:SetQueueAttributes", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueUrl", "sqs:TagQueue"] },
     ]
   })
   cluster_id         = local.svc.cluster_id
