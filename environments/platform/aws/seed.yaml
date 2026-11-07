@@ -22,36 +22,10 @@ environments:
     actors: {chiikawa-gcp-api: 4, chiikawa-gcp-worker: 2}
 
 resources:
-  # Everything moves back to AWS. The control plane hands these refs to the adapters as they are:
-  # the direction picked in the console sets only the traffic and the probes, so start the workflow
-  # as gcp → aws. Every resource already lives on GCP (e2e of 2026-11-07/08), and the database
-  # binding's current databaseRef is db:chiikawa-gcp-1975, which must equal sourceRef.
-  database:
-    sourceRef: db:chiikawa-gcp-1975
-    targetRef: db:chiikawa-aws-3e3d
-    policy: {rollbackMode: BEFORE_TARGET_WRITE, maxQuiesceSeconds: 60}
-    catalog:
-      alias: chiikawa
-      appRef: app:chiikawa
-      tables: [public.chat_messages, public.groupbuys, public.join_requests, public.notifications, public.orders, public.stats]
-      sequences: []
-      databases:
-        db:chiikawa-aws-3e3d:
-          identity: AWS_RDS:arn:aws:rds:ap-northeast-2:952561150367:db:chiikawa-aws-3e3d-db/app
-          provider: AWS_RDS
-          provider_instance: arn:aws:rds:ap-northeast-2:952561150367:db:chiikawa-aws-3e3d-db
-          secret_ref: arn:aws:secretsmanager:ap-northeast-2:952561150367:secret:foxtrot/app/chiikawa-aws-3e3d/db-operator-iE9FAT
-          writer_role: app
-          route_host: chiikawa-aws-3e3d-db.cxg4inxrw1qh.ap-northeast-2.rds.amazonaws.com
-          database: app
-        db:chiikawa-gcp-1975:
-          identity: GCP_CLOUDSQL:projects/foxtrot-513413/instances/chiikawa-gcp-1975-db/app
-          provider: GCP_CLOUDSQL
-          provider_instance: projects/foxtrot-513413/instances/chiikawa-gcp-1975-db
-          secret_ref: __CHIIKAWA_CLOUDSQL_SECRET_REF__  # filled by Terraform (cloudsql_target.tf)
-          writer_role: app
-          route_host: 27-d9eb3522-319b-442c-97dc-48420699f4f7.asia-northeast3.sql.goog
-          database: app
+  # Redis and the receipts bucket move back to AWS. The control plane hands these refs to the
+  # adapters as they are: the direction picked in the console sets only the traffic and the probes,
+  # so start the workflow as gcp → aws. The database is left out (its stage is SKIPPED): the DB
+  # adaptor does not take a Cloud SQL source yet, and the DB stays on Cloud SQL behind db-proxy.
   redis:
     sourceRef: resource:gcp
     targetRef: resource:aws
