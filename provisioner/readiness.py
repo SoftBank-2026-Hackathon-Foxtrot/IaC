@@ -29,12 +29,24 @@ class AppChecker:
         self.timeout = max(0.01, min(float(config.get("requestTimeoutSeconds", 3)), 10))
         self.opener = build_opener(ProxyHandler({}), NoRedirect())
 
-    def check(self, handoff, app):
+    def check_onprem(self, handoff, binding):
+        if not binding:
+            return {"status": "NOT_CONFIGURED", "observedAt": now(), "reason": "No app binding configured"}
+        result = self.check(
+            {"compute": {"private_ip": handoff["compute"]["privateAddress"]}},
+            {"port": binding["port"], "health_path": binding["healthPath"]},
+            expected_identity=binding["expectedServedBy"],
+            allow_loopback=handoff.get("network", {}).get("scope") == "LOCAL_ONLY")
+        result["probeScope"] = "LOCAL_ONLY" if handoff.get("network", {}).get("scope") == "LOCAL_ONLY" else "MANAGEMENT_TO_TARGET"
+        result["hostId"] = binding["hostId"]
+        return result
+
+    def check(self, handoff, app, *, expected_identity=None, allow_loopback=False):
         if not app:
             return {"status": "NOT_CONFIGURED", "observedAt": now(), "reason": "No app image configured"}
         try:
             host = ipaddress.ip_address(handoff["compute"]["private_ip"])
-            if host.is_loopback or host.is_link_local or host.is_unspecified or host.version != 4:
+            if (host.is_loopback and not allow_loopback) or host.is_link_local or host.is_unspecified or host.version != 4:
                 raise ValueError("invalid target")
             port = app.get("port", 80)
             path = app.get("health_path", "/readyz")
@@ -56,6 +68,8 @@ class AppChecker:
                     result["httpStatus"] = response.status
                     result["status"] = "READY" if response.status == 200 else "NOT_READY"
                     result["reason"] = None if response.status == 200 else "Unexpected HTTP status"
+                    if expected_identity is not None and response.getheader("X-Served-By") != expected_identity:
+                        result.update(status="NOT_READY", reason="Target app identity did not match the registered binding")
             except HTTPError as exc:
                 result.update(httpStatus=exc.code, reason="Unexpected HTTP status")
                 exc.close()

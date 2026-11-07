@@ -35,6 +35,7 @@ flowchart LR
 ## 먼저 볼 파일
 
 - [main 통합과 준비 상태](docs/release-integration.md) — 기존 입력 호환, 인프라/앱 준비 구분, 공유 Tailscale, 관측 연결
+- [클라우드 → 온프렘 설계](docs/on-prem-migration-design.md) — Ansible 실행기, 공통 입출력, 앱 스키마·준비 단계, 모듈별 수정 위치
 
 - [앱 환경 프로비저닝](docs/environment-provisioning.md) — 앱 환경 생성·수정·삭제 CLI와 API
 - [EC2 → GCE 전환·롤백 검증 기록](docs/compute-cloud-rehearsal.md) — 세션 요청 291건 성공, WebSocket·주문 확인, 임시 자원 정리
@@ -90,7 +91,7 @@ docs/                   # 설계·플랫폼 계약·운영 절차
 Terraform `>= 1.10, < 2`, Python `>= 3.10` 필요. 검증에 사용한 Terraform은 `1.13.5`이며 provider 버전은 각 root의 lock 파일에 고정합니다.
 
 ```bash
-python -m pip install -r requirements-contracts.txt
+python -m pip install -r requirements-contracts.txt -r requirements-onprem.txt -r requirements-observability.txt
 python -m unittest discover -s tests -v
 terraform fmt -check -recursive
 terraform -chdir=environments/aws init -backend=false
@@ -139,3 +140,5 @@ python tools/render_inputs.py render --cloud aws \
 ## 마이그레이션 관측
 
 실제 PLAN/APPLY와 COMPUTE 준비 결과를 컨트롤 플레인으로 보고하는 방법은 [관측 연결](docs/migration-observability.md)을 참고하세요.
+
+온프렘 실행 설정: [개인 PC 한 대 준비](docs/on-prem-setup.md) · [v2 API](contracts/onprem.openapi.yaml). 기존 AWS/GCP v1 API와 별도로 Ansible 경로를 제공한다.
