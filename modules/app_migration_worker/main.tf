@@ -136,6 +136,7 @@ module "database" {
       dependsOn   = [{ containerName = "pooler", condition = "HEALTHY" }]
     },
   ]
+  task_policy_enabled = true
   task_policy = jsonencode({
     Version = "2012-10-17"
     Statement = concat([
@@ -200,6 +201,7 @@ module "redis" {
       dependsOn   = [{ containerName = "proxy", condition = "START" }, { containerName = "syncworker", condition = "START" }]
     },
   ]
+  task_policy_enabled = length(var.redis_secret_arns) > 0
   task_policy = length(var.redis_secret_arns) == 0 ? null : jsonencode({
     Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = var.redis_secret_arns }]

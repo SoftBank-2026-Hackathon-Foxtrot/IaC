@@ -132,3 +132,69 @@ Idempotency-Key: <키>
 - 테이블 생성은 사용자 앱 책임입니다. DB 이전 에이전트는 "앱 writer가 table 소유권을 갖지 않는다"를 요구하지만, 현재 앱은 시작할 때 `CREATE TABLE/INDEX IF NOT EXISTS`를 실행하므로 앱 role이 테이블을 소유해야 합니다. 마이그레이션에 필요한 owner/writer 분리는 앱과 DB 어댑터에서 결정합니다.
 - 사설 경로는 별도 공유 Tailscale 라우터 root가 관리합니다. 앱 환경의 `router_inputs`를 연결합니다.
 - 기존 `contracts/provisioning.openapi.yaml`(관리 중인 환경의 사양 조정 API)은 그대로 두었습니다. 새 `/v1/environments`와 합칠지는 정해야 합니다.
+
+
+## 온프렘 앱 배포
+
+`cloud: onprem`은 등록된 Docker 노드에 API와 worker 컨테이너만 배포한다.
+AWS/GCP 요청은 기존 EC2/GCE Terraform 경로를 유지한다. 이 변경은 Fargate/Cloud Run 전환을 포함하지 않는다.
+
+1. 기존 provisioner 설정의 `clouds.onprem`에 [등록 예시](../provisioner/onprem-app.example.json)를 넣고 주소·소유 조직·이미지 허용 목록을 실제 값으로 바꾼다.
+2. 노드에 Docker Compose v2와 Python 3가 있어야 한다. SSH 키 파일은 provisioner에서 읽을 수 있는 0600 파일로 두고, 검증한 SSH 호스트 키를 `sshHostKey`에 등록한다. SSH 계정에는 해당 Docker 실행 권한이 필요하다.
+3. `network`는 노드에 이미 존재하는 데이터 서비스용 Docker 네트워크다. `bindAddress`는 노드의 사설 주소이며, provisioner에서 접근할 수 있어야 한다. 앱 컨테이너도 Collector와 설정한 프록시에 접근할 수 있어야 한다.
+4. 앱 비밀번호·토큰은 등록의 `secretEnv`(provisioner 환경 변수 이름) 또는 `secretFiles`(0600 파일 경로)로 전달한다. 일반 앱 요청에 SSH 정보나 비밀값을 넣지 않는다.
+
+```bash
+python -m provisioner up --org chiikawa --cloud onprem \
+  --node-id home-pc \
+  --image ghcr.io/softbank-2026-hackathon-foxtrot/chiikawa-groupbuy:RELEASE_TAG
+```
+
+HTTP에서는 내부 provisioner의 `POST /v1/environments`에 아래 본문을 보낸다.
+기존 `Authorization: Bearer <PROVISIONER_TOKEN>`과 재시도용 `Idempotency-Key`를 사용한다.
+
+```json
+{
+  "org": {"id": "chiikawa"},
+  "cloud": "onprem",
+  "target": {"nodeId": "home-pc"},
+  "app": {
+    "image": "ghcr.io/softbank-2026-hackathon-foxtrot/chiikawa-groupbuy:RELEASE_TAG",
+    "apiWorkers": 2,
+    "workerCount": 2,
+    "cpu": 1,
+    "memoryMiB": 512
+  },
+  "mode": "plan"
+}
+```
+
+`mode: plan`은 사전 점검 후 대기한다. `POST /v1/environments/{id}/apply`로 저장된 plan을 실행한다.
+앱 교체는 기존 배포 삭제 후 새 배포로 수행한다. 실행 중 연결이 끊기면 `NEEDS_RECONCILIATION`으로 남으며,
+`POST /v1/environments/{id}/reconcile`로 원격 상태를 확인한다. 확인 전에는 노드를 다른 배포에 재사용하지 않는다.
+`DELETE /v1/environments/{id}`는 해당 앱 컨테이너만 제거하며 데이터 서비스와 외부 Docker 네트워크를 유지한다.
+
+### IaC에서 데이터 서비스도 준비하는 경우
+
+기존 `onprem.catalogFile`과 `onprem.secretRoot`를 설정하고, 노드 등록에 해당 카탈로그의
+`preparation: {target: {...}, profileRef: "..."}`를 지정한다. 먼저 v2 API로 준비를 완료하고,
+앱 요청의 `target.preparationId` 또는 CLI의 `--preparation-id`에 준비 환경 ID를 전달한다.
+소유 조직·등록 대상·준비 상태가 일치해야 배포된다. 앱이 남아 있는 동안 준비 환경의 변경·정리는 거부된다.
+
+비밀 번들을 쓰는 경우 `<workRoot>/onprem-registration/bundle.json`을 0600으로 배치한다.
+형식은 `schemaVersion: 1`, `nodeId`, `node`, `catalog`, `credentials`와 선택 항목 `images`다.
+`credentials`의 키는 파일 이름이고 값은 해당 비밀값이다. 번들은 운영자가 관리하며 Git에 커밋하지 않는다.
+IaC의 ECS provisioner는 기존 EFS의 `/var/lib/foxtrot-provisioner`를 사용하므로 이 경로 아래에 등록한다.
+다른 서비스에 저장한 등록 정보가 이 provisioner로 자동 복사되지는 않는다.
+
+### 앱 시스템 메트릭
+
+`appTelemetry.applicationId`, `appTelemetry.endpoint`, `appTelemetry.headersEnv`로 수집 대상을 설정한다.
+`headersEnv`의 기본값은 `OTEL_EXPORTER_OTLP_HEADERS`이며, ECS provisioner는 기존 Collector 설정을 사용한다.
+앱에는 `application.id`, 소유 조직 ID, 배포 ID, `deployment.environment.name=onprem`, API/worker 역할이 주입된다.
+CPU·메모리·디스크 I/O·네트워크는 사용자 앱 컨테이너 범위다. 호스트 전체 메트릭용 컨테이너나 host mount는 만들지 않는다.
+`expectedServedBy`는 HTTP 앱 식별에만 쓰이며 메트릭 환경 이름을 바꾸지 않는다.
+
+반영하려면 새 provisioner 이미지를 배포하고, 시스템 메트릭 기능이 포함된 demo 이미지로 앱을 실행해야 한다.
+기존 VM·앱 컨테이너는 저장소 변경만으로 재시작되지 않는다. 컨트롤 플레인의 인증·사용자 API·메트릭 조회는 그대로 두며,
+독립 IaC 실행 경로는 위 내부 API를 사용한다.

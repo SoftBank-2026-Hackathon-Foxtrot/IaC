@@ -99,7 +99,8 @@ module "db_migration" {
       dependsOn   = [{ containerName = "pooler", condition = "HEALTHY" }]
     },
   ]
-  bind_volumes = ["runtime"]
+  bind_volumes        = ["runtime"]
+  task_policy_enabled = true
   task_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -234,6 +235,7 @@ module "object_migration" {
       GCS_CREDENTIALS_JSON = aws_secretsmanager_secret.gcp["object"].arn
     })
   }]
+  task_policy_enabled = true
   task_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -351,6 +353,7 @@ module "provisioner" {
     health  = ["python -c \"import urllib.request as u; u.urlopen('http://127.0.0.1:8070/health', timeout=2)\""]
   }]
   # Creates whole app environments (VPC, RDS, ElastiCache, EC2, IAM roles for app VMs).
+  task_policy_enabled = true
   task_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -420,16 +423,17 @@ module "control_plane" {
     })
     health = ["python -c \"import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=2)\""]
   }]
+  task_policy_enabled = true
   task_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       { Effect = "Allow", Resource = local.table_arn["foxtrot-control-plane"], Action = [
       "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"] },
       # Publishes quiesce evidence and the catalog into the DB adaptor's table (control area).
       { Effect = "Allow", Resource = aws_dynamodb_table.db_operator.arn, Action = [
         "dynamodb:DescribeTable", "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:UpdateItem",
       "dynamodb:DeleteItem", "dynamodb:ConditionCheckItem"] },
-    ]
+    ], local.security_review_statements)
   })
   cluster_id         = local.svc.cluster_id
   subnet_ids         = local.svc.subnet_ids

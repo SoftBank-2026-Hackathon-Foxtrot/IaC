@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import uuid
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 
 from . import handoff, inventory
@@ -23,10 +24,11 @@ def digest(value):
 
 
 class OnPremService:
-    def __init__(self, store, catalog, driver, checker, *, ttl=900, clock=None):
+    def __init__(self, store, catalog, driver, checker, *, ttl=900, clock=None, app_store=None):
         self.store, self.catalog, self.driver, self.checker = store, catalog, driver, checker
         self.ttl = max(60, min(int(ttl), 3600))
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self.app_store = app_store
 
     def _get(self, env_id):
         env = self.store.get("environments", env_id)
@@ -91,17 +93,44 @@ class OnPremService:
             return 202, response
 
     def command(self, env_id, action, body, key):
-        with self.store.transaction():
+        with self.app_store.lock if self.app_store else nullcontext(), self.store.transaction():
             env = self._get(env_id)
-            scope, fingerprint, previous = self._remembered(f"{env['request']['org']}/{env_id}/{action}", body, key)
+            scope, fingerprint, previous = self._remembered(
+                f"{env['request']['org']}/{env_id}/{action}", body, key
+            )
             if previous:
                 return 202, previous
+            if (
+                self.app_store
+                and action in {"plan", "apply"}
+                and any(
+                    e["cloud"] == "onprem"
+                    and e["status"] != "DESTROYED"
+                    and e["tfvars"].get("preparation_id") == env_id
+                    for e in self.app_store.environments()
+                )
+            ):
+                raise Conflict(
+                    "PREPARATION_IN_USE", "remove the app before changing its data services"
+                )
             self._busy(env_id)
             required = {"expectedRevision"}
-            optional = {"planId"} if action == "apply" else (
-                {"intent"} if action == "plan" else {"workflowId"} if action == "workflow" else set())
+            optional = (
+                {"planId"}
+                if action == "apply"
+                else (
+                    {"intent"}
+                    if action == "plan"
+                    else {"workflowId"}
+                    if action == "workflow"
+                    else set()
+                )
+            )
             inventory.fields(body, required, optional, action)
-            if type(body["expectedRevision"]) is not int or body["expectedRevision"] != env["revision"]:
+            if (
+                type(body["expectedRevision"]) is not int
+                or body["expectedRevision"] != env["revision"]
+            ):
                 raise Conflict("STALE_REVISION", "reload the environment before changing it")
             if action == "plan":
                 if env["status"] in ("NEEDS_RECONCILIATION", "RELEASED"):
@@ -109,37 +138,67 @@ class OnPremService:
                 intent = body.get("intent", "prepare")
                 require(intent in ("prepare", "cleanup"), "intent must be prepare or cleanup")
                 if intent == "cleanup" and env["workflowId"]:
-                    raise Conflict("WORKFLOW_BOUND", "cleanup requires a workflow release integration; bound hosts are retained")
+                    raise Conflict(
+                        "WORKFLOW_BOUND",
+                        "cleanup requires a workflow release integration; bound hosts are retained",
+                    )
                 if intent == "prepare" and env["workflowId"] and env.get("appliedSeal"):
-                    raise Conflict("WORKFLOW_BOUND", "cannot reconfigure services while a migration workflow owns them")
+                    raise Conflict(
+                        "WORKFLOW_BOUND",
+                        "cannot reconfigure services while a migration workflow owns them",
+                    )
                 current = self.catalog.resolve(env["request"])
                 if current != env["resolved"]:
-                    raise Conflict("REFERENCE_CHANGED", "registered references are immutable; restore the catalog or register a new environment")
+                    raise Conflict(
+                        "REFERENCE_CHANGED",
+                        (
+                            "registered references are immutable; restore the catalog or regis"
+                            "ter a new environment"
+                        ),
+                    )
                 env.update(status="PLANNING", intent=intent, plan=None, planSeal=None, error=None)
                 kind = "PLAN"
             elif action == "apply":
-                if env["status"] != "PLANNED" or body.get("planId") != (env["plan"] or {}).get("planId"):
+                if env["status"] != "PLANNED" or body.get("planId") != (env["plan"] or {}).get(
+                    "planId"
+                ):
                     raise Conflict("STALE_PLAN", "apply requires the current reviewed plan")
                 if self.clock() >= datetime.fromisoformat(env["plan"]["expiresAt"]):
                     raise Conflict("STALE_PLAN", "plan expired; create a new plan")
-                env.update(status="APPLYING" if env["intent"] == "prepare" else "RELEASING", error=None)
+                env.update(
+                    status="APPLYING" if env["intent"] == "prepare" else "RELEASING", error=None
+                )
                 kind = "APPLY"
             elif action == "check-app":
                 if env["status"] not in ("READY", "INFRA_READY", "APP_NOT_READY"):
-                    raise Conflict("INVALID_STATE", "application checks need completed infrastructure")
+                    raise Conflict(
+                        "INVALID_STATE", "application checks need completed infrastructure"
+                    )
                 env["status"] = "VERIFYING_APP"
                 env["readiness"]["application"]["status"] = "PENDING"
                 kind = "CHECK_APP"
             elif action == "reconcile":
-                if env["status"] not in ("NEEDS_RECONCILIATION", "FAILED", "READY", "APP_NOT_READY", "INFRA_READY"):
+                if env["status"] not in (
+                    "NEEDS_RECONCILIATION",
+                    "FAILED",
+                    "READY",
+                    "APP_NOT_READY",
+                    "INFRA_READY",
+                ):
                     raise Conflict("INVALID_STATE", "no execution to reconcile")
                 env.update(status="RECONCILING", error=None)
                 kind = "RECONCILE"
             elif action == "workflow":
                 value = body.get("workflowId")
-                require(type(value) is str and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value), "workflowId required")
+                require(
+                    type(value) is str and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value),
+                    "workflowId required",
+                )
                 if env["workflowId"] not in (None, value):
-                    raise Conflict("WORKFLOW_BOUND", "a preparation environment cannot be rebound to another workflow")
+                    raise Conflict(
+                        "WORKFLOW_BOUND",
+                        "a preparation environment cannot be rebound to another workflow",
+                    )
                 env["workflowId"] = value
                 env["request"]["workflowId"] = value
                 if env["handoff"]:
@@ -148,7 +207,11 @@ class OnPremService:
                 if env["status"] == "PLANNED":
                     env.update(status="REGISTERED", plan=None, planSeal=None)
                 self._save(env)
-                response = {"environmentId": env_id, "status": env["status"], "revision": env["revision"]}
+                response = {
+                    "environmentId": env_id,
+                    "status": env["status"],
+                    "revision": env["revision"],
+                }
                 self.store.remember(scope, fingerprint, response)
                 return 202, response
             else:

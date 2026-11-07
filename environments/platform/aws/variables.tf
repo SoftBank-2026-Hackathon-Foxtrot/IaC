@@ -127,6 +127,20 @@ variable "security_review" {
     gcp_credentials_secret       = string
     gcp_apply_credentials_secret = optional(string)
   })
+  validation {
+    condition = var.security_review == null ? true : try(
+      contains([true, false], var.security_review.config.readOnly) &&
+      (var.security_review.config.readOnly || var.security_review.gcp_apply_credentials_secret != null),
+      false
+    )
+    error_message = "Set readOnly explicitly; writable reviews require a separate writer secret ARN."
+  }
+  validation {
+    condition = var.security_review == null ? true : try(
+      can(regex("^[A-Za-z0-9+=,.@_/-]+$", var.security_review.config.awsRole)), false
+    )
+    error_message = "security_review.config.awsRole must name the reviewed IAM role (no wildcard)."
+  }
   default = {
     config = {
       "application" : "chiikawa",

@@ -7,6 +7,7 @@
   GET    /v1/environments/{id}
   POST   /v1/environments/{id}/apply   apply a mode=plan environment's saved plan            → 202
   POST   /v1/environments/{id}/update  {app?, sizing?, access?} merged into the environment  → 202
+  POST   /v1/environments/{id}/reconcile  inspect an interrupted on-prem app deployment      → 202
   DELETE /v1/environments/{id}         destroy everything the environment created            → 202
   GET    /v1/jobs/{id}                 status and the tail of the Terraform log
 """
@@ -21,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .service import Conflict, NotFound, Service
 from .spec import RequestError
 
-ENV = re.compile(r"^/v1/environments/(env-[a-f0-9]{12})(/apply|/update|/check-app|/workflow)?$")
+ENV = re.compile(r"^/v1/environments/(env-[a-f0-9]{12})(/apply|/update|/check-app|/workflow|/reconcile)?$")
 JOB = re.compile(r"^/v1/jobs/(job-[a-f0-9]{12})$")
 ENV2 = re.compile(r"^/v2/environments/(env-[a-f0-9]{12})(?:/(plan|apply|check-app|workflow|reconcile))?$")
 JOB2 = re.compile(r"^/v2/jobs/(job-[a-f0-9]{12})$")
@@ -118,6 +119,8 @@ class Handler(BaseHTTPRequestHandler):
                 return service.update(env_id, self.body())
             if apply == "/check-app" and self.command == "POST":
                 return service.check_app(env_id)
+            if apply == "/reconcile" and self.command == "POST":
+                return service.reconcile(env_id)
             if apply == "/workflow" and self.command == "POST":
                 return service.bind_workflow(env_id, self.body())
             if not apply and self.command == "GET":
