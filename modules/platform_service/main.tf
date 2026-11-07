@@ -51,7 +51,7 @@ variable "containers" {
     environment = optional(map(string), {})
     secrets     = optional(map(string), {}) # ENV NAME => Secrets Manager ARN
     mounts      = optional(map(string), {}) # volume name => container path
-    health      = optional(list(string))    # CMD-SHELL command
+    health      = optional(list(string))    # CMD-SHELL command, or a CMD list when it starts with "CMD"
     dependsOn   = optional(list(object({ containerName = string, condition = string })), [])
   }))
 }
@@ -164,7 +164,7 @@ resource "aws_ecs_task_definition" "this" {
     },
     c.command == null ? {} : { command = c.command },
     c.entryPoint == null ? {} : { entryPoint = c.entryPoint },
-    c.health == null ? {} : { healthCheck = { command = concat(["CMD-SHELL"], c.health), interval = 15, timeout = 5, retries = 3, startPeriod = 60 } },
+    c.health == null ? {} : { healthCheck = { command = c.health[0] == "CMD" ? c.health : concat(["CMD-SHELL"], c.health), interval = 15, timeout = 5, retries = 3, startPeriod = 60 } },
   )])
 }
 

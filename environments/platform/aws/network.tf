@@ -91,7 +91,7 @@ resource "aws_vpc_security_group_egress_rule" "tasks_all" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "tasks_from_apps" {
-  for_each = { for pair in setproduct(toset([for cidr in keys(local.ts_routes) : cidr if cidr != var.vpc_cidr]), toset([6379, 6432, 7000, 8000, 8080])) :
+  for_each = { for pair in setproduct(toset([for cidr in keys(local.ts_routes) : cidr if cidr != var.vpc_cidr]), toset([4318, 6379, 6432, 7000, 8000, 8080])) :
   "${pair[0]}:${pair[1]}" => { cidr = pair[0], port = pair[1] } }
   security_group_id = aws_security_group.tasks.id
   cidr_ipv4         = each.value.cidr

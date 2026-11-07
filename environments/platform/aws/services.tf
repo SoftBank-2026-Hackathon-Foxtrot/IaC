@@ -9,12 +9,12 @@ locals {
     log_group          = aws_cloudwatch_log_group.platform.name
     region             = var.region
   }
-  otel_env = var.observability == null ? {} : {
-    OTEL_EXPORTER_OTLP_ENDPOINT = var.observability.endpoint
+  otel_env = local.observability == null ? {} : {
+    OTEL_EXPORTER_OTLP_ENDPOINT = local.observability.endpoint
     OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
   }
-  otel_secrets = var.observability == null ? {} : {
-    OTEL_EXPORTER_OTLP_HEADERS = var.observability.headers_secret_arn
+  otel_secrets = local.observability == null ? {} : {
+    OTEL_EXPORTER_OTLP_HEADERS = local.observability.headers_secret_arn
   }
   db_namespace = "managed-apps"
   table_arn    = { for k, t in aws_dynamodb_table.pk_sk : k => t.arn }
@@ -385,9 +385,9 @@ module "control_plane" {
       CONTROL_PLANE_ALLOWED_ORIGINS          = jsonencode([var.console_url])
       CONTROL_PLANE_GITHUB_CLIENT_ID         = var.github_client_id
       CONTROL_PLANE_GITHUB_ALLOWED_IDS       = jsonencode(var.github_allowed_ids)
-      }, var.observability == null ? {} : {
-      CONTROL_PLANE_PROMETHEUS_URL = var.observability.prometheus_url
-      CONTROL_PLANE_TEMPO_URL      = var.observability.tempo_url
+      }, local.observability == null ? {} : {
+      CONTROL_PLANE_PROMETHEUS_URL = local.observability.prometheus_url
+      CONTROL_PLANE_TEMPO_URL      = local.observability.tempo_url
     })
     secrets = merge(local.otel_secrets, {
       OBSERVATION_TOKEN     = local.secret_arn["observation-token"]

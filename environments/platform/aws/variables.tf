@@ -110,7 +110,7 @@ variable "redis_allowed_commands" {
 }
 
 variable "observability" {
-  description = "Private OTEL stack from observability/compose.yaml. Headers secret contains Authorization=Bearer%20<module-token>. Null disables SDK export."
+  description = "An external OTEL stack instead of the platform's own (observability.tf). Headers secret contains Authorization=Bearer%20<module-token>. Null: the platform stack when observability_enabled, else no SDK export."
   type = object({
     endpoint           = string
     headers_secret_arn = string
