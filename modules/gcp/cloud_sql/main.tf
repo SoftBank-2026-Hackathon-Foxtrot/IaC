@@ -1,7 +1,7 @@
 resource "google_sql_database_instance" "this" {
   name                = var.name
   region              = var.region
-  database_version    = "POSTGRES_17"
+  database_version    = "POSTGRES_${var.postgres_version}"
   deletion_protection = var.deletion_protection
   settings {
     tier                        = var.tier
@@ -62,4 +62,11 @@ resource "google_sql_user" "admin" {
   instance = google_sql_database_instance.this.name
   type     = "BUILT_IN"
   password = var.admin_password
+}
+
+# Keep the original IAM login for existing consumers; app runtime uses its own password role.
+resource "google_sql_user" "app" {
+  name     = trimsuffix(var.app_service_account, ".gserviceaccount.com")
+  instance = google_sql_database_instance.this.name
+  type     = "CLOUD_IAM_SERVICE_ACCOUNT"
 }

@@ -5,10 +5,11 @@ variable "app" {
   type = object({
     image             = string
     port              = optional(number, 80)
+    health_path       = optional(string, "/readyz")
     api_workers       = optional(number, 4)
     worker_count      = optional(number, 2)
     served_by         = optional(string)
-    seed_demo_data    = optional(bool, true)
+    seed_demo_data    = optional(bool, false)
     seed_close_in_s   = optional(number, 86400)
     env               = optional(map(string), {})
     api_env           = optional(map(string), {})
@@ -17,8 +18,9 @@ variable "app" {
     tunnel_secret     = optional(string)          # Secrets Manager ARN of a Cloudflare tunnel token
     cloudflared_image = optional(string, "cloudflare/cloudflared:2024.12.2")
   })
+  default = null
   validation {
-    condition     = can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/", var.app.image))
+    condition     = var.app == null ? true : can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/", var.app.image))
     error_message = "app.image는 ECR 이미지 주소입니다 (<계정>.dkr.ecr.<리전>.amazonaws.com/<저장소>:<태그>)."
   }
 }
@@ -30,7 +32,7 @@ variable "replication_cidrs" {
 }
 
 locals {
-  extra_secret_arns = merge(var.app.secret_env, var.app.tunnel_secret == null ? {} : { TUNNEL = var.app.tunnel_secret })
+  extra_secret_arns = merge(try(var.app.secret_env, {}), try(var.app.tunnel_secret, null) == null ? {} : { TUNNEL = var.app.tunnel_secret })
   app_db_user       = "app"
 }
 
@@ -78,6 +80,7 @@ resource "aws_secretsmanager_secret_version" "db_operator" {
 }
 
 module "app_runtime" {
+  count  = var.app == null ? 0 : 1
   source = "../../modules/app_runtime"
   cloud  = "aws"
   region = var.region
@@ -91,12 +94,9 @@ module "app_runtime" {
     admin_secret        = module.rds.master_secret_arn
     admin_secret_format = "rds-json"
   }
-  redis_url = "${var.redis_transit_encryption ? "rediss" : "redis"}://${module.elasticache.endpoint}:${module.elasticache.port}"
+  redis_url = "${local.redis_transit_encryption ? "rediss" : "redis"}://${module.elasticache.endpoint}:${module.elasticache.port}"
   storage   = { bucket = module.s3.bucket_id, region = var.region }
-  tailscale = var.tailscale == null ? null : {
-    auth_key_secret = var.tailscale.auth_key_secret, tag = var.tailscale.tag,
-    routes          = [var.network.vpc_cidr], hostname = var.deployment_id
-  }
+
 }
 
 variable "force_destroy_storage" {
@@ -106,7 +106,7 @@ variable "force_destroy_storage" {
 }
 
 variable "tailscale" {
-  description = "플랫폼과의 사설망: 앱 VM이 이 키(Secrets Manager ARN)로 tailnet에 가입하고 VPC 대역을 광고합니다"
+  description = "플랫폼과의 사설망: 공유 라우터가 이 키(Secrets Manager ARN)로 가입합니다. router_inputs로 전달하며 앱 VM은 가입하지 않습니다"
   type        = object({ auth_key_secret = string, tag = optional(string, "tag:aws") })
   default     = null
 }

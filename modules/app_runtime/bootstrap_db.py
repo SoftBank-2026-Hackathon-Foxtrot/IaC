@@ -1,9 +1,7 @@
-"""Prepare the app's database on first boot: the app role, its grants, and the app's own schema.
+"""Create/rotate the app login and grant access. User apps own tables and data.
 
-Runs inside the app image (psycopg is there), as the database admin. The app role creates the
-tables itself through the app's init_schema, so the schema is the app's and identical on every
-cloud this environment is built on. Prints EMPTY when there is no group-buy yet, so the boot
-script knows whether demo data may be seeded."""
+Runs once inside the image for its psycopg dependency; never imports application code.
+"""
 
 import os
 import time
@@ -42,11 +40,4 @@ except psycopg.Error as exc:
     print(f"could not grant {role} to the admin (DB migration needs it): {exc}".splitlines()[0], flush=True)
 admin.close()
 
-os.environ["DATABASE_URL"] = (f"postgresql://{role}:{password}@{env['DB_HOST']}:{env['DB_PORT']}/{env['DB_NAME']}"
-                              "?sslmode=require")
-from app.db import connect, init_schema  # noqa: E402  (reads DATABASE_URL on import)
-
-db = connect()
-init_schema(db)
-count = db.execute("SELECT count(*) FROM groupbuys").fetchone()[0]
-print("EMPTY" if count == 0 else f"HAS_DATA {count}", flush=True)
+print("DB_ROLE_READY", flush=True)

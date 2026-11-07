@@ -5,6 +5,10 @@ import uuid
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 
+from tools.telemetry import get_telemetry
+from tools.report_observations import compute_report
+from opentelemetry.trace import Status, StatusCode
+
 from . import runner
 
 
@@ -50,7 +54,7 @@ def actions(row):
     return {"CREATED": ["PREPARE"], "PREPARED": ["START_SYNC"], "SYNCING": []}[row["stage"]]
 
 
-def status(row):
+def status(row, operations=()):
     plan = json.loads(row["plan"])
     unknown = {"result": "UNKNOWN", "reasons": ["PREPARATION_ONLY"]}
     check = {"code": "BUSINESS_PROBE", "stage": "ADVANCE", "required": True, "decision": unknown,
@@ -65,7 +69,8 @@ def status(row):
             "readiness": dict.fromkeys(("cutover", "resume", "rollback", "advance"), unknown),
             "rollback": {"method": "UNAVAILABLE", "reasons": ["PREPARATION_ONLY"]},
             "checks": [check], "progress": {"completed": None, "total": None, "unit": "containers"},
-            "details": {"compute": json.loads(row["result"]) if row["result"] else {}}}
+            "details": {"compute": {**(json.loads(row["result"]) if row["result"] else {}),
+                        "vmId": json.loads(row["target"])["vmId"], "operations": list(operations)}}}
 
 
 class Adapter:
@@ -82,6 +87,11 @@ class Adapter:
                 CREATE TABLE IF NOT EXISTS requests(path TEXT, key TEXT, body TEXT, response TEXT,
                     PRIMARY KEY(path, key));
             """)
+            # Additive migration preserves existing operation journals.
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(operations)")}
+            for column in ("requested_at", "started_at", "finished_at"):
+                if column not in columns:
+                    db.execute(f"ALTER TABLE operations ADD COLUMN {column} TEXT")
             # Never replay an external Docker command interrupted by a process exit.
             db.execute("BEGIN IMMEDIATE")
             db.execute("""UPDATE migrations SET health='UNKNOWN', active=NULL, updated=?, revision=revision+1
@@ -105,13 +115,18 @@ class Adapter:
     def get(self, kind, item):
         with self.transaction() as db:
             if kind == "migrations":
-                return status(self.migration(db, item))
+                operations = [{"operationId": op["id"], "migrationId": item, "action": op["action"],
+                               "status": op["status"], "requestedAt": op["requested_at"],
+                               "startedAt": op["started_at"], "finishedAt": op["finished_at"]}
+                              for op in db.execute("SELECT * FROM operations WHERE migration=? ORDER BY rowid DESC LIMIT 20", (item,))]
+                return status(self.migration(db, item), operations)
             row = db.execute("SELECT * FROM operations WHERE id=?", (item,)).fetchone()
             if not row:
                 raise Problem(404, "NOT_FOUND", "Unknown operation")
             error = ({"code": "EXECUTION_" + row["status"], "message": row["error"],
                       "operationId": item, "blockers": []} if row["error"] else None)
             return {"operationId": item, "migrationId": row["migration"], "action": row["action"],
+                    "requestedAt": row["requested_at"], "startedAt": row["started_at"], "finishedAt": row["finished_at"],
                     "status": row["status"], "statusUrl": "/v1/operations/" + item, "error": error,
                     "result": json.loads(row["result"]) if row["result"] else None}
 
@@ -175,7 +190,7 @@ class Adapter:
         if action == "RECONCILE":
             step = db.execute("SELECT step FROM operations WHERE migration=? ORDER BY rowid DESC LIMIT 1",
                               (item,)).fetchone()["step"]
-        db.execute("INSERT INTO operations VALUES (?,?,?,?,'QUEUED',NULL,NULL)", (op, item, action, step))
+        db.execute("INSERT INTO operations (id,migration,action,step,status,requested_at) VALUES (?,?,?,?,'QUEUED',?)", (op, item, action, step, now()))
         db.execute("UPDATE migrations SET active=?, revision=revision+1, updated=? WHERE id=?", (op, now(), item))
         url = "/v1/operations/" + op
         return [202, url, {"operationId": op, "migrationId": item, "action": action, "status": "QUEUED", "statusUrl": url}]
@@ -185,23 +200,46 @@ class Adapter:
             op = db.execute("SELECT * FROM operations WHERE status='QUEUED' ORDER BY rowid LIMIT 1").fetchone()
             if not op:
                 return False
-            db.execute("UPDATE operations SET status='RUNNING' WHERE id=?", (op["id"],))
+            db.execute("UPDATE operations SET status='RUNNING', started_at=? WHERE id=?", (now(), op["id"]))
             row = self.migration(db, op["migration"])
-        stage, result, error = row["stage"], None, None
-        try:
-            if row["target"] != canonical(self.target):
-                raise ValueError("Target registration changed")
-            result = runner.execute(op["step"], self.binding, self.target["targetRef"],
-                                    expected_revision=self.target["bindingRevision"], observe_only=op["action"] == "RECONCILE")
-            stage = "PREPARED" if op["step"] == "PREPARE" else "SYNCING"
-            outcome, health = "SUCCEEDED", "OK"
-        except Exception:
-            # START_SYNC may have created a container before an observation failed.
-            outcome = "FAILED" if op["step"] == "PREPARE" else "UNKNOWN"
-            health, error = outcome, f'{op["step"]} could not be verified; inspect the registered target'
-        with self.transaction() as db:
-            evidence = canonical(result) if result else None
-            db.execute("UPDATE operations SET status=?, error=?, result=? WHERE id=?", (outcome, error, evidence, op["id"]))
-            db.execute("""UPDATE migrations SET stage=?, health=?, active=NULL, updated=?,
-                          revision=revision+1, result=? WHERE id=?""", (stage, health, now(), evidence, row["id"]))
+        telemetry = get_telemetry("iac")
+        with telemetry.operation(op["action"], workflow=json.loads(row["plan"])["workflowId"],
+                                 migration=row["id"], operation=op["id"]) as span:
+            stage, result, error = row["stage"], None, None
+            try:
+                if row["target"] != canonical(self.target):
+                    raise ValueError("Target registration changed")
+                result = runner.execute(op["step"], self.binding, self.target["targetRef"],
+                                        expected_revision=self.target["bindingRevision"], observe_only=op["action"] == "RECONCILE")
+                stage = "PREPARED" if op["step"] == "PREPARE" else "SYNCING"
+                outcome, health = "SUCCEEDED", "OK"
+            except Exception:
+                # START_SYNC may have created a container before an observation failed.
+                outcome = "FAILED" if op["step"] == "PREPARE" else "UNKNOWN"
+                health, error = outcome, f'{op["step"]} could not be verified; inspect the registered target'
+            with self.transaction() as db:
+                evidence = canonical(result) if result else None
+                db.execute("UPDATE operations SET status=?, error=?, result=?, finished_at=? WHERE id=?", (outcome, error, evidence, now(), op["id"]))
+                db.execute("""UPDATE migrations SET stage=?, health=?, active=NULL, updated=?,
+                              revision=revision+1, result=? WHERE id=?""", (stage, health, now(), evidence, row["id"]))
+            if outcome != "SUCCEEDED":
+                span.set_status(Status(StatusCode.ERROR, outcome))
+            try:
+                view = self.get("migrations", row["id"])
+                report = compute_report(view["workflowId"], view)
+                telemetry.snapshot("COMPUTE", report["data"])
+            except Exception:
+                pass  # Telemetry does not change the persisted command result.
         return True
+
+
+    def publish_observations(self):
+        telemetry = get_telemetry("iac")
+        if not telemetry.enabled:
+            return
+        with self.transaction() as db:
+            ids = [row[0] for row in db.execute("SELECT id FROM migrations ORDER BY updated DESC LIMIT 256")]
+        for mid in ids:
+            view = self.get("migrations", mid)
+            report = compute_report(view["workflowId"], view)
+            telemetry.snapshot("COMPUTE", report["data"])

@@ -18,7 +18,7 @@ variable "app" {
     api_workers       = optional(number, 4)
     worker_count      = optional(number, 2)
     served_by         = optional(string)
-    seed_demo_data    = optional(bool, true)
+    seed_demo_data    = optional(bool, false)
     seed_close_in_s   = optional(number, 86400)
     env               = optional(map(string), {})
     api_env           = optional(map(string), {})
@@ -71,7 +71,7 @@ variable "storage" {
 }
 
 variable "tailscale" {
-  description = "앱 VM을 tailnet에 가입시키고 자기 VPC 대역을 광고합니다 (플랫폼과의 사설망). null이면 가입하지 않음"
+  description = "호환 입력. 이 모듈에서 사용하지 않습니다. 공유 라우터는 environments/tailscale에서 관리합니다."
   type = object({
     auth_key_secret = string       # 비밀 저장소에 있는 인증 키 참조
     tag             = string       # tag:aws / tag:gcp

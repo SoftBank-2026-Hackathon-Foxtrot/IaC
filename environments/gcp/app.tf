@@ -5,10 +5,11 @@ variable "app" {
   type = object({
     image             = string
     port              = optional(number, 80)
+    health_path       = optional(string, "/readyz")
     api_workers       = optional(number, 4)
     worker_count      = optional(number, 2)
     served_by         = optional(string)
-    seed_demo_data    = optional(bool, true)
+    seed_demo_data    = optional(bool, false)
     seed_close_in_s   = optional(number, 86400)
     env               = optional(map(string), {})
     api_env           = optional(map(string), {})
@@ -17,8 +18,9 @@ variable "app" {
     tunnel_secret     = optional(string)          # projects/<p>/secrets/<name> of a Cloudflare tunnel token
     cloudflared_image = optional(string, "cloudflare/cloudflared:2024.12.2")
   })
+  default = null
   validation {
-    condition     = can(regex("^[a-z0-9-]+-docker\\.pkg\\.dev/", var.app.image))
+    condition     = var.app == null ? true : can(regex("^[a-z0-9-]+-docker\\.pkg\\.dev/", var.app.image))
     error_message = "app.image는 Artifact Registry 이미지 주소입니다 (<리전>-docker.pkg.dev/<프로젝트>/<저장소>/<이미지>:<태그>)."
   }
 }
@@ -33,12 +35,12 @@ variable "db_authorized_networks" {
 }
 variable "redis_auth" {
   type        = bool
-  default     = false
+  default     = null
   description = "Memorystore AUTH. 팀 Redis 프록시가 백엔드 AUTH를 다루지 않아 기본은 끕니다."
 }
 variable "redis_transit_encryption" {
   type        = bool
-  default     = false
+  default     = null
   description = "Memorystore TLS. 팀 Redis 프록시가 TLS 백엔드를 지원하지 않아 기본은 끕니다."
 }
 
@@ -49,7 +51,7 @@ locals {
     db_admin = random_password.db_admin.result
     storage  = module.iam.hmac_secret
   }
-  extra_secret_refs = merge(var.app.secret_env, var.app.tunnel_secret == null ? {} : { TUNNEL = var.app.tunnel_secret })
+  extra_secret_refs = merge(try(var.app.secret_env, {}), try(var.app.tunnel_secret, null) == null ? {} : { TUNNEL = var.app.tunnel_secret })
 }
 
 resource "random_password" "app_db" {
@@ -101,7 +103,6 @@ resource "google_secret_manager_secret_iam_member" "app" {
   for_each = merge(
     { app_db = google_secret_manager_secret.app_db.id, db_admin = google_secret_manager_secret.db_admin.id, storage = google_secret_manager_secret.storage.id },
     local.extra_secret_refs,
-    var.tailscale == null ? {} : { TAILSCALE = var.tailscale.auth_key_secret },
   )
   secret_id = each.value
   role      = "roles/secretmanager.secretAccessor"
@@ -109,6 +110,7 @@ resource "google_secret_manager_secret_iam_member" "app" {
 }
 
 module "app_runtime" {
+  count  = var.app == null ? 0 : 1
   source = "../../modules/app_runtime"
   cloud  = "gcp"
   region = var.region
@@ -123,7 +125,7 @@ module "app_runtime" {
     admin_secret_format = "plain"
     admin_user          = module.cloud_sql.admin_user
   }
-  redis_url = "${var.redis_transit_encryption ? "rediss" : "redis"}://${module.memorystore.host}:${module.memorystore.port}"
+  redis_url = "${local.redis_transit_encryption ? "rediss" : "redis"}://${module.memorystore.host}:${module.memorystore.port}"
   storage = {
     bucket        = module.storage.bucket_name
     region        = "auto"
@@ -131,10 +133,7 @@ module "app_runtime" {
     access_key_id = module.iam.hmac_access_id
     secret        = google_secret_manager_secret.storage.id
   }
-  tailscale = var.tailscale == null ? null : {
-    auth_key_secret = var.tailscale.auth_key_secret, tag = var.tailscale.tag,
-    routes          = [var.network.subnet_cidr, "${var.network.service_range_address}/${var.network.service_range_prefix}"], hostname = var.deployment_id
-  }
+
 }
 
 variable "force_destroy_storage" {
@@ -144,7 +143,7 @@ variable "force_destroy_storage" {
 }
 
 variable "tailscale" {
-  description = "플랫폼과의 사설망: 앱 VM이 이 키(projects/<p>/secrets/<name>)로 tailnet에 가입하고 VM·관리형 서비스 대역을 광고합니다"
+  description = "플랫폼과의 사설망: 공유 라우터가 이 키(projects/<p>/secrets/<name>)로 가입합니다. router_inputs로 전달하며 앱 VM은 가입하지 않습니다"
   type        = object({ auth_key_secret = string, tag = optional(string, "tag:gcp") })
   default     = null
 }

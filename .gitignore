@@ -55,3 +55,6 @@ compute/binding.local.json
 
 # provisioner local config and workspaces
 provisioner/config.json
+
+# Local OTEL tokens
+observability/.env

@@ -15,6 +15,11 @@ from provisioner.service import Conflict, Service
 from provisioner.store import Store
 from provisioner.terraform import TerraformError
 
+class ReadyChecker:
+    def check(self, handoff, app):
+        return {"status": "READY", "observedAt": "2026-01-01T00:00:00+00:00", "lastSuccessAt": "2026-01-01T00:00:00+00:00", "httpStatus": 200}
+
+
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG = json.loads((ROOT / "provisioner/catalog.json").read_text())
 CONFIG = json.loads((ROOT / "provisioner/config.example.json").read_text())
@@ -114,7 +119,7 @@ class ServiceTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.tf = FakeTerraform(self.tmp.name)
-        self.service = Service(Store(Path(self.tmp.name) / "p.db"), self.tf, CATALOG, CONFIG)
+        self.service = Service(Store(Path(self.tmp.name) / "p.db"), self.tf, CATALOG, CONFIG, checker=ReadyChecker())
         self.service.today = lambda: TODAY
 
     def tearDown(self):
@@ -194,7 +199,7 @@ class ServiceTest(unittest.TestCase):
 class HttpTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.service = Service(Store(Path(self.tmp.name) / "p.db"), FakeTerraform(self.tmp.name), CATALOG, CONFIG)
+        self.service = Service(Store(Path(self.tmp.name) / "p.db"), FakeTerraform(self.tmp.name), CATALOG, CONFIG, checker=ReadyChecker())
         self.server = ProvisionerServer(("127.0.0.1", 0), self.service, TOKEN)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.base = f"http://127.0.0.1:{self.server.server_address[1]}"

@@ -49,6 +49,8 @@ def request_from(args) -> dict:
         body["app"]["image"] = args.image
     if args.plan_only:
         body["mode"] = "plan"
+    if args.workflow_id:
+        body["workflowId"] = args.workflow_id
     return body
 
 
@@ -65,6 +67,7 @@ def main() -> None:
         p.add_argument("--cloud", required=True, choices=["aws", "gcp"])
         p.add_argument("--template", default="chiikawa-groupbuy")
         p.add_argument("--image", help="override the configured registry image")
+        p.add_argument("--workflow-id", help="control-plane workflow to receive preparation observations")
         p.add_argument("--plan-only", action="store_true", help="stop after the plan (up only)")
     down = sub.add_parser("down")
     down.add_argument("environment_id")

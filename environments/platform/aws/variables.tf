@@ -85,3 +85,14 @@ variable "redis_endpoints" {
     gcp = "redis://10.21.107.99:6379"
   }
 }
+
+variable "observability" {
+  description = "Private OTEL stack from observability/compose.yaml. Headers secret contains Authorization=Bearer%20<module-token>. Null disables SDK export."
+  type = object({
+    endpoint           = string
+    headers_secret_arn = string
+    prometheus_url     = string
+    tempo_url          = string
+  })
+  default = null
+}

@@ -26,7 +26,7 @@ module "security_groups" {
   enable_cloudflare_tunnel = var.enable_cloudflare_tunnel
   migration_source_cidrs   = var.migration_source_cidrs
   replication_cidrs        = var.replication_cidrs
-  enable_tailscale         = var.tailscale != null
+  enable_tailscale         = false
 }
 module "s3" {
   source        = "../../modules/aws/s3"
@@ -39,7 +39,7 @@ module "iam" {
   name        = var.deployment_id
   tags        = merge(module.metadata.common, { component = "identity" })
   bucket_arn  = module.s3.bucket_arn
-  secret_arns = concat([aws_secretsmanager_secret.app_db.arn, module.rds.master_secret_arn], values(local.extra_secret_arns), var.tailscale == null ? [] : [var.tailscale.auth_key_secret])
+  secret_arns = concat([aws_secretsmanager_secret.app_db.arn, module.rds.master_secret_arn], values(local.extra_secret_arns))
 }
 module "ec2" {
   source                = "../../modules/aws/ec2"
@@ -52,8 +52,8 @@ module "ec2" {
   security_group_id     = module.security_groups.app_id
   instance_profile_name = module.iam.instance_profile_name
   key_name              = var.key_name
-  user_data             = module.app_runtime.script
-  source_dest_check     = var.tailscale == null
+  user_data             = try(module.app_runtime[0].script, null)
+  source_dest_check     = true
   depends_on            = [module.vpc]
 }
 module "rds" {
@@ -66,7 +66,7 @@ module "rds" {
   storage_gib               = var.sizing.db_storage_gib
   max_storage_gib           = var.sizing.db_max_storage_gib
   multi_az                  = var.sizing.db_multi_az
-  engine_version            = var.postgres_version
+  engine_version            = local.postgres_version
   database_name             = var.database_name
   deletion_protection       = var.deletion_protection
   final_snapshot_identifier = var.final_snapshot_identifier
@@ -80,6 +80,6 @@ module "elasticache" {
   security_group_id  = module.security_groups.cache_id
   node_type          = var.sizing.cache_node_type
   node_count         = var.sizing.cache_node_count
-  transit_encryption = var.redis_transit_encryption
+  transit_encryption = local.redis_transit_encryption
   auth_token         = var.redis_auth_token
 }

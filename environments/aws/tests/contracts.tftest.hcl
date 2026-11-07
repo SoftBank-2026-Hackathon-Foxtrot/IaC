@@ -38,11 +38,15 @@ run "root_wiring" {
     app                       = { image = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/chiikawa-groupbuy:test" }
   }
   assert {
+    condition     = !strcontains(module.app_runtime[0].script, "init_schema") && !strcontains(module.app_runtime[0].script, "/seed?")
+    error_message = "App schema creation and seed data belong to the user app, not IaC."
+  }
+  assert {
     condition     = output.handoff.cloud == "aws" && output.handoff.schema_version == 1
     error_message = "AWS handoff contract must remain stable."
   }
   assert {
-    condition     = strcontains(module.app_runtime.script, "aws ecr get-login-password") && strcontains(module.app_runtime.script, "chiikawa-groupbuy:test") && !strcontains(module.app_runtime.script, "TESTONLY")
+    condition     = strcontains(module.app_runtime[0].script, "aws ecr get-login-password") && strcontains(module.app_runtime[0].script, "chiikawa-groupbuy:test") && !strcontains(module.app_runtime[0].script, "TESTONLY")
     error_message = "The VM must pull the app from ECR and boot it without secrets in user data."
   }
   assert {
@@ -69,7 +73,7 @@ run "replication_opens_only_listed_ip" {
     error_message = "Cross-cloud replication gives RDS a public endpoint."
   }
 }
-run "tailscale_makes_the_vm_a_router" {
+run "tailscale_uses_a_separate_shared_router" {
   command = apply
   variables {
     deployment_id             = "fox-aws-poc01"
@@ -84,7 +88,7 @@ run "tailscale_makes_the_vm_a_router" {
     tailscale                 = { auth_key_secret = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:foxtrot/tailscale-authkey-aws" }
   }
   assert {
-    condition     = strcontains(module.app_runtime.script, "--advertise-routes='10.10.0.0/16'") && strcontains(module.app_runtime.script, "--advertise-tags='tag:aws'") && !module.ec2.source_dest_check
+    condition     = !strcontains(module.app_runtime[0].script, "tailscale up") && module.ec2.source_dest_check && output.router_inputs.vpc_id == module.vpc.vpc_id
     error_message = "With Tailscale the VM joins as tag:aws, routes its VPC and forwards packets."
   }
 }
@@ -323,4 +327,29 @@ run "management_reject_public" {
     enable_cloudflare_tunnel = true
   }
   expect_failures = [var.proxy_cidrs]
+}
+
+run "legacy_infrastructure_only" {
+  command = apply
+  variables {
+    deployment_id             = "fox-aws-poc01"
+    metadata                  = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01" }
+    region                    = "ap-northeast-2"
+    account_id                = "123456789012"
+    bucket_name               = "replace-with-globally-unique-aws-bucket"
+    database_name             = "app"
+    web_ingress_cidrs         = ["0.0.0.0/0"]
+    web_ports                 = [80, 443]
+    admin_cidrs               = []
+    deletion_protection       = true
+    final_snapshot_identifier = "fox-aws-poc01-final-unique"
+    network                   = { "vpc_cidr" = "10.10.0.0/16", "public_subnet_cidr" = "10.10.0.0/24", "private_subnet_cidrs" = ["10.10.10.0/24", "10.10.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
+    sizing                    = { "compute_instance_type" = "t3.small", "compute_disk_gib" = 30, "db_instance_class" = "db.t3.micro", "db_storage_gib" = 20, "db_max_storage_gib" = 100, "db_multi_az" = false, "cache_node_type" = "cache.t3.micro", "cache_node_count" = 1 }
+    ami_id                    = "ami-1234567890abcdef0"
+    redis_auth_token          = "TESTONLYlegacytoken12345678"
+  }
+  assert {
+    condition     = output.handoff.app == null && output.handoff.cache.tls_required && output.handoff.database.version == "16"
+    error_message = "Legacy inputs retain infrastructure-only deployment, PG16 and cache TLS."
+  }
 }

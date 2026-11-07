@@ -9,6 +9,13 @@ locals {
     log_group          = aws_cloudwatch_log_group.platform.name
     region             = var.region
   }
+  otel_env = var.observability == null ? {} : {
+    OTEL_EXPORTER_OTLP_ENDPOINT = var.observability.endpoint
+    OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+  }
+  otel_secrets = var.observability == null ? {} : {
+    OTEL_EXPORTER_OTLP_HEADERS = var.observability.headers_secret_arn
+  }
   db_namespace = "managed-apps"
   table_arn    = { for k, t in aws_dynamodb_table.pk_sk : k => t.arn }
 }
@@ -72,8 +79,8 @@ module "db_migration" {
       entryPoint  = ["foxtrot-db-runtime"]
       command     = ["pooler"]
       ports       = [6432]
-      environment = local.db_env
-      secrets     = local.db_secrets
+      environment = merge(local.db_env, local.otel_env)
+      secrets     = merge(local.db_secrets, local.otel_secrets)
       mounts      = { runtime = "/run/foxtrot" }
       health      = ["test -f /run/foxtrot/pooler.ready && pg_isready -q -h 127.0.0.1 -p 6432 -d pgbouncer -U pooler_admin -t 3"]
     },
@@ -83,8 +90,8 @@ module "db_migration" {
       entryPoint  = ["foxtrot-db-runtime"]
       command     = ["backend"]
       ports       = [8080]
-      environment = local.db_env
-      secrets     = merge(local.db_secrets, { DB_OPERATOR_RUNTIME_GCP_CREDENTIALS_JSON = aws_secretsmanager_secret.gcp["db"].arn })
+      environment = merge(local.db_env, local.otel_env)
+      secrets     = merge(local.db_secrets, local.otel_secrets, { DB_OPERATOR_RUNTIME_GCP_CREDENTIALS_JSON = aws_secretsmanager_secret.gcp["db"].arn })
       mounts      = { runtime = "/run/foxtrot" }
       health      = ["curl --insecure --fail --silent --max-time 3 https://127.0.0.1:8080/live"]
       dependsOn   = [{ containerName = "pooler", condition = "HEALTHY" }]
@@ -173,12 +180,12 @@ module "redis_migrator" {
     image   = local.image["redis-statemig"]
     command = ["uvicorn", "statemig.api:app", "--host", "0.0.0.0", "--port", "8090", "--timeout-keep-alive", "120"]
     ports   = [8090]
-    environment = {
+    environment = merge(local.otel_env, {
       STATEMIG_CONTROL_FILE = "/state/control.json"
       STATEMIG_PROXY        = "http://redis-proxy.internal:7000"
       STATEMIG_SYNCWORKER   = "http://redis-syncworker.internal:7100"
-    }
-    secrets = merge(local.redis_token, { STATEMIG_ENDPOINTS = local.secret_arn["redis-endpoints-admin"] })
+    })
+    secrets = merge(local.redis_token, local.otel_secrets, { STATEMIG_ENDPOINTS = local.secret_arn["redis-endpoints-admin"] })
     mounts  = { state = "/state" }
   }]
   cluster_id         = local.svc.cluster_id
@@ -200,14 +207,14 @@ module "object_migration" {
     name  = "server"
     image = local.image["object-migration"]
     ports = [8080]
-    environment = {
+    environment = merge(local.otel_env, {
       DYNAMODB_TABLE   = aws_dynamodb_table.pk_sk["foxtrot-object-migration"].name
       DYNAMODB_REGION  = var.region
       ENGINE           = "rclone"
       GCP_PROJECT      = var.gcp_project_id
       OBJECT_RESOURCES = var.object_resources
-    }
-    secrets = { API_TOKEN = local.secret_arn["object-adapter-token"] }
+    })
+    secrets = merge(local.otel_secrets, { API_TOKEN = local.secret_arn["object-adapter-token"] })
   }]
   task_policy = jsonencode({
     Version = "2012-10-17"
@@ -240,14 +247,14 @@ module "traffic" {
     name  = "server"
     image = local.image["traffic"]
     ports = [8001]
-    environment = {
+    environment = merge(local.otel_env, {
       CF_ZONE_ID      = var.traffic.zone_id
       CF_ACCOUNT_ID   = var.traffic.account_id
       CF_LB_ID        = var.traffic.lb_id
       CF_POOL_IDS     = var.traffic.pool_ids
       TRAFFIC_DB_PATH = "/var/lib/foxtrot/traffic/traffic.db"
-    }
-    secrets = { TRAFFIC_SERVICE_TOKEN = local.secret_arn["traffic-service-token"], CF_API_TOKEN = local.secret_arn["cloudflare-api-token"] }
+    })
+    secrets = merge(local.otel_secrets, { TRAFFIC_SERVICE_TOKEN = local.secret_arn["traffic-service-token"], CF_API_TOKEN = local.secret_arn["cloudflare-api-token"] })
     mounts  = { data = "/var/lib/foxtrot/traffic" }
     health  = ["python -c \"import urllib.request as u; u.urlopen('http://127.0.0.1:8001/health', timeout=2)\""]
   }]
@@ -303,11 +310,11 @@ module "provisioner" {
     image   = local.image["provisioner"]
     ports   = [8070]
     command = ["serve", "--host", "0.0.0.0", "--port", "8070"]
-    environment = {
+    environment = merge(local.otel_env, {
       PROVISIONER_CONFIG_JSON = local.provisioner_config
       AWS_REGION              = var.region
-    }
-    secrets = { PROVISIONER_TOKEN = local.secret_arn["provisioner-token"], GOOGLE_CREDENTIALS = aws_secretsmanager_secret.gcp["provisioner"].arn }
+    })
+    secrets = merge(local.otel_secrets, { PROVISIONER_TOKEN = local.secret_arn["provisioner-token"], GOOGLE_CREDENTIALS = aws_secretsmanager_secret.gcp["provisioner"].arn })
     mounts  = { work = "/var/lib/foxtrot-provisioner" }
     health  = ["python -c \"import urllib.request as u; u.urlopen('http://127.0.0.1:8070/health', timeout=2)\""]
   }]
@@ -345,29 +352,34 @@ module "control_plane" {
     # The image carries no seed; write the seed and the internal CA from the environment first.
     entryPoint = ["sh", "-c"]
     command    = ["printf '%s' \"$CONTROL_PLANE_SEED_YAML\" > /tmp/seed.yaml && printf '%s' \"$FOXTROT_CA_PEM\" > /tmp/foxtrot-ca.pem && exec control-plane"]
-    environment = {
-      CONTROL_PLANE_ENVIRONMENT        = "production"
-      CONTROL_PLANE_SEED_PATH          = "/tmp/seed.yaml"
-      CONTROL_PLANE_SEED_YAML          = file("${path.module}/seed.yaml")
-      FOXTROT_CA_PEM                   = local.ca_pem
-      CONTROL_PLANE_TABLE_NAME         = aws_dynamodb_table.pk_sk["foxtrot-control-plane"].name
-      CONTROL_PLANE_REGION             = var.region
-      CONTROL_PLANE_DB_GATE_TABLE      = aws_dynamodb_table.db_operator.name
-      CONTROL_PLANE_DB_GATE_NAMESPACE  = local.db_namespace
-      CONTROL_PLANE_TRAFFIC_URL        = "http://traffic.internal:8001"
-      CONTROL_PLANE_PUBLIC_URL         = var.console_url
-      CONTROL_PLANE_ALLOWED_ORIGINS    = jsonencode([var.console_url])
-      CONTROL_PLANE_GITHUB_CLIENT_ID   = var.github_client_id
-      CONTROL_PLANE_GITHUB_ALLOWED_IDS = jsonencode(var.github_allowed_ids)
-    }
-    secrets = {
+    environment = merge(local.otel_env, {
+      CONTROL_PLANE_ENVIRONMENT              = "production"
+      CONTROL_PLANE_OBSERVATION_TOKEN_SECRET = "env:OBSERVATION_TOKEN"
+      CONTROL_PLANE_SEED_PATH                = "/tmp/seed.yaml"
+      CONTROL_PLANE_SEED_YAML                = file("${path.module}/seed.yaml")
+      FOXTROT_CA_PEM                         = local.ca_pem
+      CONTROL_PLANE_TABLE_NAME               = aws_dynamodb_table.pk_sk["foxtrot-control-plane"].name
+      CONTROL_PLANE_REGION                   = var.region
+      CONTROL_PLANE_DB_GATE_TABLE            = aws_dynamodb_table.db_operator.name
+      CONTROL_PLANE_DB_GATE_NAMESPACE        = local.db_namespace
+      CONTROL_PLANE_TRAFFIC_URL              = "http://traffic.internal:8001"
+      CONTROL_PLANE_PUBLIC_URL               = var.console_url
+      CONTROL_PLANE_ALLOWED_ORIGINS          = jsonencode([var.console_url])
+      CONTROL_PLANE_GITHUB_CLIENT_ID         = var.github_client_id
+      CONTROL_PLANE_GITHUB_ALLOWED_IDS       = jsonencode(var.github_allowed_ids)
+      }, var.observability == null ? {} : {
+      CONTROL_PLANE_PROMETHEUS_URL = var.observability.prometheus_url
+      CONTROL_PLANE_TEMPO_URL      = var.observability.tempo_url
+    })
+    secrets = merge(local.otel_secrets, {
+      OBSERVATION_TOKEN     = local.secret_arn["observation-token"]
       TRAFFIC_SERVICE_TOKEN = local.secret_arn["traffic-service-token"]
       WORKLOAD_TOKEN        = local.secret_arn["workload-token"]
       GITHUB_CLIENT_SECRET  = local.secret_arn["github-client-secret"]
       DB_ADAPTER_TOKEN      = local.secret_arn["db-adapter-token"]
       REDIS_ADAPTER_TOKEN   = local.secret_arn["redis-admin-token"]
       OBJECT_ADAPTER_TOKEN  = local.secret_arn["object-adapter-token"]
-    }
+    })
     health = ["python -c \"import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=2)\""]
   }]
   task_policy = jsonencode({

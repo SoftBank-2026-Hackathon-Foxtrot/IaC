@@ -30,12 +30,15 @@ flowchart LR
   A --> O[진행 상태·인프라 출력 인계]
 ```
 
-AI 추천 API/모델 호출, 사용자 승인 UI, apply 실행기, 실제 비용 수집기는 이 초안의 범위 밖입니다. 추천 JSON을 받아 안전하게 입력 파일로 만드는 작은 도구는 포함합니다.
+앱 환경 plan/apply는 `provisioner/`가 실행합니다. AI 추천 API/모델 호출, 사용자 승인 UI, 실제 비용 수집기는 이 초안의 범위 밖입니다. 추천 JSON을 받아 안전하게 입력 파일로 만드는 작은 도구는 포함합니다.
 
 ## 먼저 볼 파일
 
-- [앱 환경 프로비저닝](docs/environment-provisioning.md) — 치이카와 앱 환경을 처음부터 띄우는 CLI·API, 팀 레포와 맞춘 설정
+- [main 통합과 준비 상태](docs/release-integration.md) — 기존 입력 호환, 인프라/앱 준비 구분, 공유 Tailscale, 관측 연결
 
+- [앱 환경 프로비저닝](docs/environment-provisioning.md) — 앱 환경 생성·수정·삭제 CLI와 API
+- [EC2 → GCE 전환·롤백 검증 기록](docs/compute-cloud-rehearsal.md) — 세션 요청 291건 성공, WebSocket·주문 확인, 임시 자원 정리
+- [Notion 팀 공유 요약](https://app.notion.com/p/410b7958f327817b97c3faba860ec22b) — 검증 결과와 다음 통합 작업
 - [COMPUTE 호출 방법](compute/README.md) — 컨트롤 플레인에서 계획 등록, 컨테이너 준비·기동, 결과 조회
 
 - [치이카와 LIVE PoC 연결](docs/demo-deployment.md) — Redis 이전 설정, 관리망 입력, DB 초기 권한과 WebSocket
@@ -132,3 +135,7 @@ python tools/render_inputs.py render --cloud aws \
 - 비용 수집·보안 점검 결과 저장소와 원본 자원 ID 연결 방식.
 
 위 항목을 확정하지 않은 상태를 프로덕션 준비 완료로 표시하지 않습니다.
+
+## 마이그레이션 관측
+
+실제 PLAN/APPLY와 COMPUTE 준비 결과를 컨트롤 플레인으로 보고하는 방법은 [관측 연결](docs/migration-observability.md)을 참고하세요.

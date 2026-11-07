@@ -26,7 +26,7 @@ SUFFIX = re.compile(r"^[a-f0-9]{4}$")
 APP_FIELDS = {  # request (camelCase) -> Terraform app object
     "image": "image", "apiWorkers": "api_workers", "workerCount": "worker_count", "seedDemoData": "seed_demo_data",
     "env": "env", "apiEnv": "api_env", "workerEnv": "worker_env", "secretEnv": "secret_env",
-    "tunnelSecret": "tunnel_secret", "port": "port",
+    "tunnelSecret": "tunnel_secret", "port": "port", "healthPath": "health_path",
 }
 ACCESS_FIELDS = {
     "aws": {"replicationCidrs": "replication_cidrs", "proxyCidrs": "proxy_cidrs", "migrationSourceCidrs": "migration_source_cidrs",
@@ -51,7 +51,9 @@ def deployment_id(org_id: str, cloud: str, suffix: str) -> str:
 def parse(request: dict, catalog: dict, config: dict) -> dict:
     """Check the request's shape and return its normalised form (no cloud calls)."""
     require(type(request) is dict, "body must be a JSON object")
-    require(not (request.keys() - {"org", "cloud", "app", "target", "sizing", "access", "mode"}), "unknown top-level field")
+    require(not (request.keys() - {"org", "cloud", "app", "target", "sizing", "access", "mode", "workflowId"}), "unknown top-level field")
+    workflow = request.get("workflowId")
+    require(workflow is None or (type(workflow) is str and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", workflow)), "invalid workflowId")
     org = request.get("org")
     require(type(org) is dict and type(org.get("id")) is str and ORG_ID.match(org["id"]) is not None,
             "org.id: 3-32 lowercase letters, digits or hyphens, starting with a letter")
@@ -68,7 +70,7 @@ def parse(request: dict, catalog: dict, config: dict) -> dict:
     for field in ("target", "sizing", "access"):
         require(type(request.get(field, {})) is dict, f"{field} must be an object")
     require(not (request.get("access", {}).keys() - ACCESS_FIELDS[cloud].keys()), f"access: allowed fields for {cloud} are {sorted(ACCESS_FIELDS[cloud])}")
-    return {"org": {"id": org["id"], "name": org.get("name", org["id"])}, "cloud": cloud, "template": template,
+    return {"workflowId": workflow, "org": {"id": org["id"], "name": org.get("name", org["id"])}, "cloud": cloud, "template": template,
             "app": {k: v for k, v in app.items() if k != "template"}, "target": request.get("target", {}),
             "sizing": request.get("sizing", {}), "access": request.get("access", {}), "mode": mode}
 

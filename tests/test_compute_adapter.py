@@ -39,6 +39,11 @@ class AdapterTests(unittest.TestCase):
         body = {"action": "PREPARE", "expectedRevision": 1}
         accepted = self.adapter.post(item, "prepare", body)
         self.assertTrue(self.adapter.run_next())
+        operation = self.adapter.get("operations", accepted[2]["operationId"])
+        self.assertIsNotNone(operation["requestedAt"])
+        self.assertIsNotNone(operation["startedAt"])
+        self.assertIsNotNone(operation["finishedAt"])
+        self.assertLessEqual(operation["startedAt"], operation["finishedAt"])
         self.assertEqual(created, self.create())
         self.assertEqual(accepted, self.adapter.post(item, "prepare", body))
         self.assertFalse(self.adapter.run_next())

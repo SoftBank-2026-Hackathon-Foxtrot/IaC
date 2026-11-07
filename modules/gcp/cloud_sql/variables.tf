@@ -71,3 +71,12 @@ variable "authorized_networks" {
   default     = {}
   description = "공인 IP 접속을 허용할 이름 => CIDR. 비어 있으면 공인 IP를 만들지 않습니다."
 }
+
+variable "postgres_version" {
+  type    = string
+  default = "17"
+  validation {
+    condition     = contains(["16", "17"], var.postgres_version)
+    error_message = "Use PostgreSQL 16 or 17."
+  }
+}
