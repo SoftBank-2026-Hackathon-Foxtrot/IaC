@@ -32,6 +32,14 @@ verb = "ALTER" if exists else "CREATE"
 admin.execute(sql.SQL(verb + " ROLE {} LOGIN PASSWORD {}").format(sql.Identifier(role), sql.Literal(password)))
 admin.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(sql.Identifier(env["DB_NAME"]), sql.Identifier(role)))
 admin.execute(sql.SQL("GRANT USAGE, CREATE ON SCHEMA public TO {}").format(sql.Identifier(role)))
+# The app role owns its tables, and only a table's owner may add it to a publication or apply
+# replicated rows to it (managed admins are not superusers). The platform's DB migration runs as
+# this admin, so the admin takes the app role's privileges.
+try:
+    admin.execute(sql.SQL("GRANT {} TO {} WITH INHERIT TRUE, SET TRUE").format(
+        sql.Identifier(role), sql.Identifier(env["DB_ADMIN_USER"])))
+except psycopg.Error as exc:
+    print(f"could not grant {role} to the admin (DB migration needs it): {exc}".splitlines()[0], flush=True)
 admin.close()
 
 os.environ["DATABASE_URL"] = (f"postgresql://{role}:{password}@{env['DB_HOST']}:{env['DB_PORT']}/{env['DB_NAME']}"

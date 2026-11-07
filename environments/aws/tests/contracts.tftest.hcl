@@ -11,6 +11,9 @@ mock_provider "aws" {
   mock_resource "aws_secretsmanager_secret" {
     defaults = { arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:app-db" }
   }
+  mock_data "aws_secretsmanager_secret_version" {
+    defaults = { secret_string = "{\"username\":\"platformadmin\",\"password\":\"test-password\"}" }
+  }
   mock_resource "aws_elasticache_replication_group" {
     defaults = { primary_endpoint_address = "test-cache.abc.apn2.cache.amazonaws.com", port = 6379 }
   }
