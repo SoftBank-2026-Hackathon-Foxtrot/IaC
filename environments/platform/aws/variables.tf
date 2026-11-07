@@ -56,8 +56,8 @@ variable "redis_enabled" {
 }
 variable "object_resources" {
   type        = string
-  default     = "{}"
-  description = "object-migration OBJECT_RESOURCES (이전 대상 버킷 목록, JSON)"
+  default     = "{\"aws-receipts\": {\"kind\": \"s3\", \"bucket\": \"foxtrot-chiikawa-aws-3e3d\", \"region\": \"ap-northeast-2\", \"ref\": \"default\"}, \"gcp-receipts\": {\"kind\": \"gcs\", \"bucket\": \"foxtrot-chiikawa-gcp-1975\", \"ref\": \"env:GCS\"}}"
+  description = "object-migration OBJECT_RESOURCES (이전 대상 버킷 목록, JSON). 키가 시드의 resource:<이름>"
 }
 variable "traffic" {
   description = "트래픽 서비스의 Cloudflare 식별자 (트래픽 파트 값). 비어 있으면 /v1이 503"

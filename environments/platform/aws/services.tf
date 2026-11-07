@@ -208,13 +208,18 @@ module "object_migration" {
     image = local.image["object-migration"]
     ports = [8080]
     environment = merge(local.otel_env, {
-      DYNAMODB_TABLE   = aws_dynamodb_table.pk_sk["foxtrot-object-migration"].name
-      DYNAMODB_REGION  = var.region
-      ENGINE           = "rclone"
-      GCP_PROJECT      = var.gcp_project_id
+      DYNAMODB_TABLE  = aws_dynamodb_table.pk_sk["foxtrot-object-migration"].name
+      DYNAMODB_REGION = var.region
+      ENGINE          = "rclone"
+      # No GCP_PROJECT: GCS sources (the reverse sync after a cutover) are mirrored every round
+      # instead of followed through Pub/Sub, which the object service account has no role for.
       OBJECT_RESOURCES = var.object_resources
     })
-    secrets = merge(local.otel_secrets, { API_TOKEN = local.secret_arn["object-adapter-token"] })
+    # GCS buckets use ref "env:GCS": the platform's object service account key.
+    secrets = merge(local.otel_secrets, {
+      API_TOKEN            = local.secret_arn["object-adapter-token"]
+      GCS_CREDENTIALS_JSON = aws_secretsmanager_secret.gcp["object"].arn
+    })
   }]
   task_policy = jsonencode({
     Version = "2012-10-17"
