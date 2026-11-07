@@ -82,7 +82,10 @@ resource "aws_secretsmanager_secret_version" "chiikawa_cloudsql_operator" {
   secret_id = aws_secretsmanager_secret.chiikawa_cloudsql_operator.id
   secret_string = jsonencode({
     adminDsn       = "postgresql://${local.cloudsql_admin_auth}@${local.cloudsql_address}?sslmode=verify-full&sslrootcert=/run/foxtrot/server-ca.crt"
-    replicationDsn = "postgresql://${local.cloudsql_admin_auth}@${local.cloudsql_address}?sslmode=require"
+    # RDS opens this one as the subscriber (GCP → AWS) and cannot resolve the private zone's name
+    # ("could not translate host name"), so hostaddr gives it the address. host stays the
+    # certificate name, which the adaptor checks against route_host.
+    replicationDsn = "postgresql://${local.cloudsql_admin_auth}@${local.cloudsql_address}?sslmode=require&hostaddr=${var.chiikawa_cloudsql.private_ip}"
     writerPassword = data.aws_secretsmanager_secret_version.chiikawa_app_db.secret_string
   })
 }
