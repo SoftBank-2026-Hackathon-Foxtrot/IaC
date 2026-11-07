@@ -402,8 +402,12 @@ module "control_plane" {
       }, local.observability == null ? {} : {
       CONTROL_PLANE_PROMETHEUS_URL = local.observability.prometheus_url
       CONTROL_PLANE_TEMPO_URL      = local.observability.tempo_url
+      }, var.security_review == null ? {} : {
+      CONTROL_PLANE_SECURITY_REVIEW_CONFIG_JSON = jsonencode(var.security_review.config)
     })
-    secrets = merge(local.otel_secrets, {
+    secrets = merge(local.otel_secrets, var.security_review == null ? {} : {
+      SECURITY_GCP_CREDENTIALS = var.security_review.gcp_credentials_secret
+      }, {
       OBSERVATION_TOKEN     = local.secret_arn["observation-token"]
       TRAFFIC_SERVICE_TOKEN = local.secret_arn["traffic-service-token"]
       WORKLOAD_TOKEN        = local.secret_arn["workload-token"]
