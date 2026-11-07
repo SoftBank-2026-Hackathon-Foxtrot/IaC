@@ -47,5 +47,18 @@ class AppTelemetryTests(unittest.TestCase):
 
     def test_loaded_application_identity_overrides_example_name(self):
         app = {}
-        configure_app(app, {"applicationId": "chiikawa", "appTelemetry": {"applicationId": "goods", "endpoint": "http://collector:4318", "headersSecrets": {"aws": "secret"}}}, "aws", owner="owner", deployment="deployment")
+        configure_app(
+            app,
+            {
+                "applicationId": "chiikawa",
+                "appTelemetry": {
+                    "applicationId": "goods",
+                    "endpoint": "http://collector:4318",
+                    "headersSecrets": {"aws": "secret"},
+                },
+            },
+            "aws",
+            owner="owner",
+            deployment="deployment",
+        )
         self.assertEqual(app["env"]["OTEL_APPLICATION_ID"], "chiikawa")
