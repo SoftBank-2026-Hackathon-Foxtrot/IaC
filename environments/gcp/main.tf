@@ -40,7 +40,7 @@ module "firewall" {
   admin_cidrs              = var.admin_cidrs
   proxy_cidrs              = var.proxy_cidrs
   enable_cloudflare_tunnel = var.enable_cloudflare_tunnel
-  enable_tailscale         = false
+  enable_tailscale         = var.tailscale != null
   service_cidr             = "${var.network.service_range_address}/${var.network.service_range_prefix}"
 }
 module "compute" {
@@ -55,7 +55,7 @@ module "compute" {
   subnetwork_id         = module.network.subnetwork_id
   service_account_email = module.iam.service_account_email
   startup_script        = try(module.app_runtime[0].script, null)
-  can_ip_forward        = false
+  can_ip_forward        = var.tailscale != null && var.app != null
   depends_on            = [module.firewall, google_secret_manager_secret_iam_member.app]
 }
 module "cloud_sql" {

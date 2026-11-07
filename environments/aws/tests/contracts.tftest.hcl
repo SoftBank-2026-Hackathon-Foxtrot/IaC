@@ -73,7 +73,7 @@ run "replication_opens_only_listed_ip" {
     error_message = "Cross-cloud replication gives RDS a public endpoint."
   }
 }
-run "tailscale_uses_a_separate_shared_router" {
+run "tailscale_makes_the_vm_a_router" {
   command = apply
   variables {
     deployment_id             = "fox-aws-poc01"
@@ -88,7 +88,7 @@ run "tailscale_uses_a_separate_shared_router" {
     tailscale                 = { auth_key_secret = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:foxtrot/tailscale-authkey-aws" }
   }
   assert {
-    condition     = !strcontains(module.app_runtime[0].script, "tailscale up") && module.ec2.source_dest_check && output.router_inputs.vpc_id == module.vpc.vpc_id
+    condition     = strcontains(module.app_runtime[0].script, "--advertise-tags='tag:aws'") && strcontains(module.app_runtime[0].script, "--advertise-routes='10.10.0.0/16'") && !module.ec2.source_dest_check && output.router_inputs.vpc_id == module.vpc.vpc_id
     error_message = "With Tailscale the VM joins as tag:aws, routes its VPC and forwards packets."
   }
 }
