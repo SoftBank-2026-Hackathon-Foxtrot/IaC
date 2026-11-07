@@ -101,7 +101,8 @@ Idempotency-Key: <키>
 - `terraform validate`, `terraform test`(mock provider): AWS 14개, GCP 10개. 부팅 스크립트의 레지스트리 로그인, 비밀값 부재, PG17·논리 복제, Redis 기본값을 검사합니다.
 - `python -m unittest discover -s tests`: 입력 규칙, 작업 수명주기, HTTP 경로.
 - API가 만든 입력을 mock provider로 두 클라우드 모두 plan·apply했습니다.
-- **실제 클라우드 배포는 아직 하지 않았습니다.** 실제 이미지 pull, DB 부트스트랩, 앱 기동은 첫 실배포에서 확인합니다.
+- **2026-11-06 첫 실배포 (AWS, 플랫폼의 provisioner 서비스로):** `POST /v1/environments` `{org: chiikawa, cloud: aws}` → 리소스 44개, 약 11분. 앱 VM이 ECR 이미지를 받아 DB 계정·schema를 만들고 API·worker를 띄우고 데모 데이터를 넣음 (`http://<고정 IP>/` 200, `X-Served-By: aws`).
+- **터널 연결 (A안):** `POST /v1/environments/{id}/update` `{app: {port: 8000, tunnelSecret: <foxtrot/app/cloudflare-tunnel-aws>}}`로 트래픽 팀의 `foxtrot-traffic-aws` 터널을 새 앱 VM이 넘겨받음. 터널 토큰이 있으면 provisioner가 7844 송신을 엶. 테스트 EC2 `foxtrot-traffic-test-a`는 중지(삭제 아님). `https://aws.foxtrot.live`, `https://app.foxtrot.live` 모두 치이카와 앱 응답.
 
 ## 남은 것
 
