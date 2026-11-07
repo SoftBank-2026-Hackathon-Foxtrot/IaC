@@ -119,3 +119,28 @@ variable "observability" {
   })
   default = null
 }
+
+variable "security_review" {
+  description = "Console security review (control-plane security_review): CONTROL_PLANE_SECURITY_REVIEW_CONFIG_JSON and the GCP reader key it reads (SECURITY_GCP_CREDENTIALS). Null turns it off. Set up by Jeongbin on 11-08 outside Terraform; the key secret is managed outside this root."
+  type = object({
+    config                 = any
+    gcp_credentials_secret = string
+  })
+  default = {
+    config = {
+      "application" : "chiikawa",
+      "allowedUserIds" : [
+        "github:121543941"
+      ],
+      "awsRole" : "chiikawa-aws-3e3d-app",
+      "awsBucket" : "foxtrot-chiikawa-aws-3e3d",
+      "gcpBucket" : "foxtrot-chiikawa-gcp-1975",
+      "extraBucket" : "foxtrot-security-demo-513413",
+      "gcpPrincipal" : "serviceAccount:chiikawa-gcp-1975-app@foxtrot-513413.iam.gserviceaccount.com",
+      "gcpCredentialsRef" : "env:SECURITY_GCP_CREDENTIALS",
+      "mode" : "cloud",
+      "readOnly" : true
+    }
+    gcp_credentials_secret = "arn:aws:secretsmanager:ap-northeast-2:952561150367:secret:foxtrot/platform/gcp-security-reader-credentials-DETF5H"
+  }
+}
