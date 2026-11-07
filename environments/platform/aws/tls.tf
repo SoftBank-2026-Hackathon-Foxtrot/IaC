@@ -20,7 +20,7 @@ resource "tls_private_key" "db" {
 }
 resource "tls_cert_request" "db" {
   private_key_pem = tls_private_key.db.private_key_pem
-  dns_names       = ["db-proxy.internal", "db-migration.internal", "localhost"]
+  dns_names       = ["db-proxy.internal", "db-migration.internal", "*.internal", "localhost"]
   ip_addresses    = ["127.0.0.1"]
   subject {
     common_name = "db-proxy.internal"
