@@ -103,6 +103,7 @@ Idempotency-Key: <키>
 - API가 만든 입력을 mock provider로 두 클라우드 모두 plan·apply했습니다.
 - **2026-11-06 첫 실배포 (AWS, 플랫폼의 provisioner 서비스로):** `POST /v1/environments` `{org: chiikawa, cloud: aws}` → 리소스 44개, 약 11분. 앱 VM이 ECR 이미지를 받아 DB 계정·schema를 만들고 API·worker를 띄우고 데모 데이터를 넣음 (`http://<고정 IP>/` 200, `X-Served-By: aws`).
 - **터널 연결 (A안):** `POST /v1/environments/{id}/update` `{app: {port: 8000, tunnelSecret: <foxtrot/app/cloudflare-tunnel-aws>}}`로 트래픽 팀의 `foxtrot-traffic-aws` 터널을 새 앱 VM이 넘겨받음. 터널 토큰이 있으면 provisioner가 7844 송신을 엶. 테스트 EC2 `foxtrot-traffic-test-a`는 중지(삭제 아님). `https://aws.foxtrot.live`, `https://app.foxtrot.live` 모두 치이카와 앱 응답.
+- **채팅 WebSocket (2026-11-07):** 앱은 WebSocket의 Origin과 Host가 같아야 받는데, LB pool이 Host를 `aws.foxtrot.live`로 바꿔 보내서 `app.foxtrot.live`에서 403이었음. aws·gcp 터널에 `app.foxtrot.live → 127.0.0.1:8000` 경로를 추가하고, 두 pool의 엔드포인트 Host 헤더를 `app.foxtrot.live`로 바꿈(앱은 수정하지 않음). 이후 화면·API·DB/Redis·채팅(`history`, `ready`) 점검 모두 통과. 모니터는 `aws.`/`gcp.` 경로로 그대로 동작.
 
 ## 남은 것
 
