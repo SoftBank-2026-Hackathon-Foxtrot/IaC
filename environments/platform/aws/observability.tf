@@ -146,9 +146,9 @@ module "observability" {
       environment = {
         TEMPO_CONFIG = local.otel_tempo_config
       }
-      # /ready stays 503 for minutes while the ring settles; the HTTP server answering is enough
-      # for the collector, which retries exports.
-      health = ["wget -qO- http://127.0.0.1:3200/api/echo > /dev/null || exit 1"]
+      # The image has busybox but no /bin/sh, so no CMD-SHELL. /ready stays 503 for minutes while
+      # the ring settles; the HTTP server answering is enough for the collector, which retries.
+      health = ["CMD", "/busybox/wget", "-qO-", "http://127.0.0.1:3200/api/echo"]
     },
   ]
   depends_on = [aws_secretsmanager_secret_version.generated]
