@@ -14,7 +14,7 @@ scope: scope:chiikawa
 
 environments:
   aws:
-    appUrl: http://10.10.0.82:8000
+    appUrl: http://10.10.0.117:8000
     trafficPool: aws  # an environment name in the traffic service's CF_POOL_IDS
     actors: {chiikawa-aws-api: 4, chiikawa-aws-worker: 2}
   gcp:
