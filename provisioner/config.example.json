@@ -96,6 +96,5 @@
     "deadlineSeconds": 180,
     "intervalSeconds": 5,
     "requestTimeoutSeconds": 3
-  },
-  "observations": null
+  }
 }

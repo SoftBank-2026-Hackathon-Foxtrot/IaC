@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send bounded preparation evidence to the control plane. No provisioning side effects."""
+"""Export bounded preparation evidence with the official OpenTelemetry SDK."""
 
 import argparse
 import json
@@ -115,8 +115,6 @@ def load(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workflow", required=True)
-    parser.add_argument("--control-plane", required=True, help="Backend base URL, including /api if gateway requires it")
-    parser.add_argument("--token-env", default="OBSERVATION_TOKEN")
     commands = parser.add_subparsers(dest="resource", required=True)
     infra = commands.add_parser("infra")
     infra.add_argument("--job-json", required=True)
@@ -131,12 +129,20 @@ def main():
     compute.add_argument("--adapter-token-env", default="COMPUTE_TOKEN")
     compute.add_argument("--watch", action="store_true", help="Poll every five seconds until interrupted")
     args = parser.parse_args()
-    url = args.control_plane.rstrip("/") + "/internal/workflows/" + quote(args.workflow, safe="") + "/preparation"
+    if __package__:
+        from .telemetry import get_telemetry
+    else:
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from tools.telemetry import get_telemetry
+    telemetry = get_telemetry("iac")
+    if not telemetry.enabled:
+        parser.error("Set OTEL_EXPORTER_OTLP_ENDPOINT to the Collector")
     while True:
         if args.resource == "provisioner":
             for report in provisioner_reports(args.workflow, load(args.environment_json), load(args.job_json)):
-                request(url, os.environ[args.token_env], report)
-            print(f"Infrastructure and app observations recorded for {args.workflow}", flush=True)
+                telemetry.snapshot(report["resource"], report["data"])
+            print(f"Infrastructure and app observations queued to OTEL for {args.workflow}", flush=True)
             return
         if args.resource == "infra":
             report = infra_report(args.workflow, load(args.job_json), load(args.plan_json), load(args.handoff_json))
@@ -144,8 +150,8 @@ def main():
             migration = request(args.adapter_url.rstrip("/") + "/v1/migrations/" + quote(args.migration_id, safe=""),
                                 os.environ[args.adapter_token_env])
             report = compute_report(args.workflow, migration)
-        request(url, os.environ[args.token_env], report)
-        print(f"{report['resource']} observation recorded for {args.workflow}", flush=True)
+        telemetry.snapshot(report["resource"], report["data"])
+        print(f"{report['resource']} observation queued to OTEL for {args.workflow}", flush=True)
         if args.resource != "compute" or not args.watch:
             return
         time.sleep(5)

@@ -69,3 +69,14 @@ variable "traffic" {
   })
   default = {}
 }
+
+variable "observability" {
+  description = "Private OTEL stack from observability/compose.yaml. Headers secret contains Authorization=Bearer%20<module-token>. Null disables SDK export."
+  type = object({
+    endpoint           = string
+    headers_secret_arn = string
+    prometheus_url     = string
+    tempo_url          = string
+  })
+  default = null
+}

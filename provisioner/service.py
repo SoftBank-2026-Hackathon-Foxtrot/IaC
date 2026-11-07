@@ -20,6 +20,9 @@ import secrets
 import threading
 import uuid
 
+from tools.telemetry import get_telemetry
+from opentelemetry.trace import Status, StatusCode
+
 from . import spec
 from .store import Store
 from .terraform import Terraform, TerraformError
@@ -188,10 +191,24 @@ class Service:
                                           error="process stopped while a job was running")
 
     def run_forever(self, stop: threading.Event) -> None:
-        while not stop.is_set():
-            if not self.run_next():
-                self.wake.wait(2)
-                self.wake.clear()
+        def observe():
+            while not stop.is_set():
+                try:
+                    self.publish_observations()
+                except Exception:
+                    pass  # An observation outage cannot stop a provisioning job.
+                stop.wait(5)
+        observer = threading.Thread(target=observe, name="otel-provisioner", daemon=True)
+        observer.start()
+        try:
+            while not stop.is_set():
+                if not self.run_next():
+                    self.wake.wait(2)
+                    self.wake.clear()
+        finally:
+            stop.set()
+            observer.join(timeout=3)
+            get_telemetry("iac").close()
 
     def run_next(self) -> bool:
         job = self.store.next_queued()
@@ -201,6 +218,14 @@ class Service:
         return True
 
     def execute(self, job: dict) -> None:
+        env = self.get(job["environment_id"])
+        with get_telemetry("iac").operation(job["kind"], workflow=env.get("workflowId") or "",
+                                            operation=job["id"]) as span:
+            self._execute_job(job)
+            if self.store.job(job["id"])["status"] != "SUCCEEDED":
+                span.set_status(Status(StatusCode.ERROR, "JOB_UNCONFIRMED"))
+
+    def _execute_job(self, job: dict) -> None:
         env = self.store.environment(job["environment_id"])
         cloud, env_id = env["cloud"], env["id"]
         self.store.update_job(job["id"], status="RUNNING", started_at=now())
@@ -248,17 +273,16 @@ class Service:
 
     def _publish(self, env_id: str, job_id: str) -> None:
         """Observation delivery never changes the result of a Terraform or app check job."""
-        config = self.config.get("observations")
+        telemetry = get_telemetry("iac")
         env = self.get(env_id)
-        if not config or not env.get("workflowId"):
+        if not telemetry.enabled or not env.get("workflowId"):
             return
-        from tools.report_observations import provisioner_reports, request
-        from urllib.parse import quote
-        result = {"status": "RECORDED", "observedAt": now()}
+        from tools.report_observations import provisioner_reports
+        result = {"status": "QUEUED_OTEL", "observedAt": now()}
         try:
-            url = config["controlPlaneUrl"].rstrip("/") + "/internal/workflows/" + quote(env["workflowId"], safe="") + "/preparation"
             for report in provisioner_reports(env["workflowId"], env, self.job(job_id)):
-                request(url, os.environ[config.get("tokenEnv", "OBSERVATION_TOKEN")], report)
+                if not telemetry.snapshot(report["resource"], report["data"]):
+                    result["status"] = "OMITTED"
         except Exception as exc:
             result.update(status="FAILED", reason=type(exc).__name__)
         readiness = env["readiness"]
@@ -281,3 +305,15 @@ class Service:
     def _not_busy(self, env_id: str) -> None:
         if self.store.busy(env_id):
             raise Conflict("RESOURCE_BUSY", "a job for this environment is still queued or running")
+
+
+    def publish_observations(self):
+        if not get_telemetry("iac").enabled:
+            return
+        for env in self.store.environments()[:256]:
+            if not env["request"].get("workflowId"):
+                continue
+            with self.store.lock:
+                job = self.store.db.execute("SELECT id FROM jobs WHERE environment_id=? ORDER BY created_at DESC LIMIT 1", (env["id"],)).fetchone()
+            if job:
+                self._publish(env["id"], job["id"])
