@@ -104,8 +104,10 @@ echo "database: $DB_STATE"
 run() {  # name, env file, command...
   local name="$1" envfile="$2"; shift 2
   docker rm -f "$name" >/dev/null 2>&1 || true
+  # WORKLOAD_INSTANCE: containers on the host network each run as PID 1, so the app puts the
+  # container name in the process ID it reports to the control plane.
   docker run -d --name "$name" --restart unless-stopped --network host --stop-timeout 35 \
-    --env-file "$CONF/common.env" --env-file "$envfile" "$IMAGE" "$@"
+    --env-file "$CONF/common.env" --env-file "$envfile" -e WORKLOAD_INSTANCE="$name" "$IMAGE" "$@"
 }
 run app-api "$CONF/api.env" uvicorn app.main:app --host 0.0.0.0 --port ${port} --workers ${api_workers} \
   --timeout-keep-alive 120 --ws-max-size 4096
