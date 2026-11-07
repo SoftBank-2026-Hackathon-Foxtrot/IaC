@@ -133,3 +133,7 @@ python tools/render_inputs.py render --cloud aws \
 - 비용 수집·보안 점검 결과 저장소와 원본 자원 ID 연결 방식.
 
 위 항목을 확정하지 않은 상태를 프로덕션 준비 완료로 표시하지 않습니다.
+
+## 마이그레이션 관측
+
+실제 PLAN/APPLY와 COMPUTE 준비 결과를 컨트롤 플레인으로 보고하는 방법은 [관측 연결](docs/migration-observability.md)을 참고하세요.
