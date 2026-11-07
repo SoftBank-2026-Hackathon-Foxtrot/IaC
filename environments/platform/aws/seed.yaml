@@ -19,7 +19,7 @@ environments:
     actors: {chiikawa-aws-api: 4, chiikawa-aws-worker: 2}
   gcp:
     appUrl: http://10.20.0.2:8000
-    trafficPool: gcp
+    trafficPool: chiikawa-gcp  # our own pool (tunnel foxtrot-chiikawa-gcp), not the traffic part's test pool
     actors: {chiikawa-gcp-api: 4, chiikawa-gcp-worker: 2}
 
 resources:
