@@ -5,9 +5,18 @@ mock_provider "aws" {
   mock_resource "aws_iam_role" {
     defaults = { arn = "arn:aws:iam::123456789012:role/test-app" }
   }
+  mock_resource "aws_db_instance" {
+    defaults = { address = "test-db.abc.ap-northeast-2.rds.amazonaws.com", port = 5432, master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:rds-master", kms_key_id = "", secret_status = "active" }] }
+  }
+  mock_resource "aws_secretsmanager_secret" {
+    defaults = { arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:app-db" }
+  }
+  mock_resource "aws_elasticache_replication_group" {
+    defaults = { primary_endpoint_address = "test-cache.abc.apn2.cache.amazonaws.com", port = 6379 }
+  }
 }
 run "root_wiring" {
-  command = plan
+  command = apply
   variables {
     deployment_id             = "fox-aws-poc01"
     metadata                  = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01" }
@@ -20,15 +29,76 @@ run "root_wiring" {
     admin_cidrs               = []
     deletion_protection       = true
     final_snapshot_identifier = "fox-aws-poc01-final-unique"
-    network                   = { "vpc_cidr" = "10.20.0.0/16", "public_subnet_cidr" = "10.20.0.0/24", "private_subnet_cidrs" = ["10.20.10.0/24", "10.20.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
+    network                   = { "vpc_cidr" = "10.10.0.0/16", "public_subnet_cidr" = "10.10.0.0/24", "private_subnet_cidrs" = ["10.10.10.0/24", "10.10.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
     sizing                    = { "compute_instance_type" = "t3.small", "compute_disk_gib" = 30, "db_instance_class" = "db.t3.micro", "db_storage_gib" = 20, "db_max_storage_gib" = 100, "db_multi_az" = false, "cache_node_type" = "cache.t3.micro", "cache_node_count" = 1 }
     ami_id                    = "ami-1234567890abcdef0"
-    redis_auth_token          = "TESTONLYnotarealsecret123456789"
+    app                       = { image = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/chiikawa-groupbuy:test" }
   }
   assert {
     condition     = output.handoff.cloud == "aws" && output.handoff.schema_version == 1
     error_message = "AWS handoff contract must remain stable."
   }
+  assert {
+    condition     = strcontains(module.app_runtime.script, "aws ecr get-login-password") && strcontains(module.app_runtime.script, "chiikawa-groupbuy:test") && !strcontains(module.app_runtime.script, "TESTONLY")
+    error_message = "The VM must pull the app from ECR and boot it without secrets in user data."
+  }
+  assert {
+    condition     = output.handoff.database.version == "17" && output.handoff.database.logical_replication && !output.handoff.database.publicly_accessible && !output.handoff.cache.tls_required
+    error_message = "PG17 with logical replication, private DB and a plain-RESP cache (Redis proxy) are the defaults."
+  }
+}
+run "replication_opens_only_listed_ip" {
+  command = apply
+  variables {
+    deployment_id             = "fox-aws-poc01"
+    metadata                  = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01" }
+    region                    = "ap-northeast-2"
+    account_id                = "123456789012"
+    bucket_name               = "replace-with-globally-unique-aws-bucket"
+    final_snapshot_identifier = "fox-aws-poc01-final-unique"
+    network                   = { "vpc_cidr" = "10.10.0.0/16", "public_subnet_cidr" = "10.10.0.0/24", "private_subnet_cidrs" = ["10.10.10.0/24", "10.10.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
+    ami_id                    = "ami-1234567890abcdef0"
+    app                       = { image = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/chiikawa-groupbuy:test" }
+    replication_cidrs         = ["34.64.10.20/32"]
+  }
+  assert {
+    condition     = output.handoff.database.publicly_accessible && length(module.vpc.private_subnet_ids) == 2
+    error_message = "Cross-cloud replication gives RDS a public endpoint."
+  }
+}
+run "tailscale_makes_the_vm_a_router" {
+  command = apply
+  variables {
+    deployment_id             = "fox-aws-poc01"
+    metadata                  = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01" }
+    region                    = "ap-northeast-2"
+    account_id                = "123456789012"
+    bucket_name               = "replace-with-globally-unique-aws-bucket"
+    final_snapshot_identifier = "fox-aws-poc01-final-unique"
+    network                   = { "vpc_cidr" = "10.10.0.0/16", "public_subnet_cidr" = "10.10.0.0/24", "private_subnet_cidrs" = ["10.10.10.0/24", "10.10.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
+    ami_id                    = "ami-1234567890abcdef0"
+    app                       = { image = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/chiikawa-groupbuy:test" }
+    tailscale                 = { auth_key_secret = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:foxtrot/tailscale-authkey-aws" }
+  }
+  assert {
+    condition     = strcontains(module.app_runtime.script, "--advertise-routes='10.10.0.0/16'") && strcontains(module.app_runtime.script, "--advertise-tags='tag:aws'") && !module.ec2.source_dest_check
+    error_message = "With Tailscale the VM joins as tag:aws, routes its VPC and forwards packets."
+  }
+}
+run "reject_non_registry_image" {
+  command = plan
+  variables {
+    deployment_id             = "fox-aws-poc01"
+    metadata                  = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01" }
+    region                    = "ap-northeast-2"
+    account_id                = "123456789012"
+    bucket_name               = "replace-with-globally-unique-aws-bucket"
+    final_snapshot_identifier = "fox-aws-poc01-final-unique"
+    network                   = { "vpc_cidr" = "10.10.0.0/16", "public_subnet_cidr" = "10.10.0.0/24", "private_subnet_cidrs" = ["10.10.10.0/24", "10.10.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
+    ami_id                    = "ami-1234567890abcdef0"
+    app                       = { image = "docker.io/library/nginx:latest" }
+  }
+  expect_failures = [var.app]
 }
 run "reject_open_ssh" {
   command = plan
@@ -44,10 +114,10 @@ run "reject_open_ssh" {
     admin_cidrs               = ["0.0.0.0/0"]
     deletion_protection       = true
     final_snapshot_identifier = "fox-aws-poc01-final-unique"
-    network                   = { "vpc_cidr" = "10.20.0.0/16", "public_subnet_cidr" = "10.20.0.0/24", "private_subnet_cidrs" = ["10.20.10.0/24", "10.20.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
+    network                   = { "vpc_cidr" = "10.10.0.0/16", "public_subnet_cidr" = "10.10.0.0/24", "private_subnet_cidrs" = ["10.10.10.0/24", "10.10.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
     sizing                    = { "compute_instance_type" = "t3.small", "compute_disk_gib" = 30, "db_instance_class" = "db.t3.micro", "db_storage_gib" = 20, "db_max_storage_gib" = 100, "db_multi_az" = false, "cache_node_type" = "cache.t3.micro", "cache_node_count" = 1 }
     ami_id                    = "ami-1234567890abcdef0"
-    redis_auth_token          = "TESTONLYnotarealsecret123456789"
+    app                       = { image = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/chiikawa-groupbuy:test" }
     key_name                  = "existing-key"
   }
   expect_failures = [var.admin_cidrs]
@@ -66,10 +136,10 @@ run "reject_database_public_port" {
     admin_cidrs               = []
     deletion_protection       = true
     final_snapshot_identifier = "fox-aws-poc01-final-unique"
-    network                   = { "vpc_cidr" = "10.20.0.0/16", "public_subnet_cidr" = "10.20.0.0/24", "private_subnet_cidrs" = ["10.20.10.0/24", "10.20.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
+    network                   = { "vpc_cidr" = "10.10.0.0/16", "public_subnet_cidr" = "10.10.0.0/24", "private_subnet_cidrs" = ["10.10.10.0/24", "10.10.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
     sizing                    = { "compute_instance_type" = "t3.small", "compute_disk_gib" = 30, "db_instance_class" = "db.t3.micro", "db_storage_gib" = 20, "db_max_storage_gib" = 100, "db_multi_az" = false, "cache_node_type" = "cache.t3.micro", "cache_node_count" = 1 }
     ami_id                    = "ami-1234567890abcdef0"
-    redis_auth_token          = "TESTONLYnotarealsecret123456789"
+    app                       = { image = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/chiikawa-groupbuy:test" }
   }
   expect_failures = [var.web_ports]
 }
@@ -87,10 +157,10 @@ run "reject_unreviewed_size" {
     admin_cidrs               = []
     deletion_protection       = true
     final_snapshot_identifier = "fox-aws-poc01-final-unique"
-    network                   = { "vpc_cidr" = "10.20.0.0/16", "public_subnet_cidr" = "10.20.0.0/24", "private_subnet_cidrs" = ["10.20.10.0/24", "10.20.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
+    network                   = { "vpc_cidr" = "10.10.0.0/16", "public_subnet_cidr" = "10.10.0.0/24", "private_subnet_cidrs" = ["10.10.10.0/24", "10.10.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
     sizing                    = { "compute_instance_type" = "p5.48xlarge" }
     ami_id                    = "ami-1234567890abcdef0"
-    redis_auth_token          = "TESTONLYnotarealsecret123456789"
+    app                       = { image = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/chiikawa-groupbuy:test" }
   }
   expect_failures = [var.sizing]
 }
@@ -106,7 +176,7 @@ run "private_database" {
     storage_gib               = 20
     max_storage_gib           = 100
     multi_az                  = false
-    engine_version            = "16"
+    engine_version            = "17"
     database_name             = "app"
     deletion_protection       = true
     final_snapshot_identifier = "test-final"
@@ -118,6 +188,10 @@ run "private_database" {
   assert {
     condition     = aws_db_instance.this.manage_master_user_password && aws_db_instance.this.deletion_protection && !aws_db_instance.this.skip_final_snapshot
     error_message = "RDS credentials and deletion controls must not regress."
+  }
+  assert {
+    condition     = aws_db_parameter_group.this.family == "postgres17" && { for p in aws_db_parameter_group.this.parameter : p.name => p.value }["rds.logical_replication"] == "1"
+    error_message = "The DB migration agent needs logical replication on PostgreSQL 17."
   }
 }
 run "private_storage" {
@@ -136,17 +210,18 @@ run "private_storage" {
     error_message = "Versioning and nonempty-bucket deletion protection are required."
   }
 }
-run "cache_requires_auth_and_tls" {
+run "cache_tls_and_auth_together" {
   command = plan
   module { source = "../../modules/aws/elasticache" }
   variables {
-    name              = "test-cache"
-    tags              = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01", "deployment_id" = "test-poc", "managed_by" = "terraform", "template_version" = "v0-1", "security_profile" = "public-app-private-data-v1" }
-    subnet_ids        = ["subnet-123", "subnet-456"]
-    security_group_id = "sg-123"
-    node_type         = "cache.t3.micro"
-    node_count        = 2
-    auth_token        = "TESTONLYnotarealsecret123456789"
+    name               = "test-cache"
+    tags               = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01", "deployment_id" = "test-poc", "managed_by" = "terraform", "template_version" = "v0-1", "security_profile" = "public-app-private-data-v1" }
+    subnet_ids         = ["subnet-123", "subnet-456"]
+    security_group_id  = "sg-123"
+    node_type          = "cache.t3.micro"
+    node_count         = 2
+    transit_encryption = true
+    auth_token         = "TESTONLYnotarealsecret123456789"
   }
   assert {
     condition     = aws_elasticache_replication_group.this.transit_encryption_enabled && aws_elasticache_replication_group.this.at_rest_encryption_enabled && aws_elasticache_replication_group.this.auth_token_update_strategy == "SET"
@@ -161,6 +236,37 @@ run "cache_requires_auth_and_tls" {
     error_message = "Migration requires attached keyspace notifications and noeviction."
   }
 
+}
+
+run "cache_plain_resp_by_default" {
+  command = plan
+  module { source = "../../modules/aws/elasticache" }
+  variables {
+    name              = "test-cache"
+    tags              = {}
+    subnet_ids        = ["subnet-123", "subnet-456"]
+    security_group_id = "sg-123"
+    node_type         = "cache.t3.micro"
+    node_count        = 1
+  }
+  assert {
+    condition     = !aws_elasticache_replication_group.this.transit_encryption_enabled && aws_elasticache_replication_group.this.at_rest_encryption_enabled
+    error_message = "The team's Redis proxy speaks plain RESP; at-rest encryption stays on."
+  }
+}
+run "cache_tls_needs_token" {
+  command = plan
+  module { source = "../../modules/aws/elasticache" }
+  variables {
+    name               = "test-cache"
+    tags               = {}
+    subnet_ids         = ["subnet-123", "subnet-456"]
+    security_group_id  = "sg-123"
+    node_type          = "cache.t3.micro"
+    node_count         = 1
+    transit_encryption = true
+  }
+  expect_failures = [aws_elasticache_replication_group.this]
 }
 
 run "management_enabled" {

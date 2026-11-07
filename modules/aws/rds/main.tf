@@ -4,11 +4,18 @@ resource "aws_db_subnet_group" "this" {
   tags       = var.tags
 }
 resource "aws_db_parameter_group" "this" {
-  name   = "${var.name}-pg16"
-  family = "postgres16"
+  name   = "${var.name}-pg17"
+  family = "postgres17"
   parameter {
     name  = "rds.force_ssl"
     value = "1"
+  }
+  # Logical replication lets the DB migration agent copy this database to another cloud
+  # (publication/subscription). It needs a reboot, so it is set from the first apply.
+  parameter {
+    name         = "rds.logical_replication"
+    value        = "1"
+    apply_method = "pending-reboot"
   }
   tags = var.tags
 }
@@ -27,7 +34,7 @@ resource "aws_db_instance" "this" {
   db_subnet_group_name            = aws_db_subnet_group.this.name
   vpc_security_group_ids          = [var.security_group_id]
   parameter_group_name            = aws_db_parameter_group.this.name
-  publicly_accessible             = false
+  publicly_accessible             = var.publicly_accessible
   multi_az                        = var.multi_az
   backup_retention_period         = 7
   backup_window                   = "18:00-19:00"

@@ -57,3 +57,9 @@ variable "final_snapshot_identifier" {
   type        = string
   description = "삭제 시 사용할 고유 final snapshot 이름"
 }
+
+variable "publicly_accessible" {
+  type        = bool
+  default     = false
+  description = "Give the instance a public endpoint. Only for cross-cloud replication; the security group still limits who can connect."
+}

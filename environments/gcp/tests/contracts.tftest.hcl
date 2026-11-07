@@ -5,9 +5,21 @@ mock_provider "google" {
   mock_resource "google_compute_network" {
     defaults = { id = "projects/test-project/global/networks/test" }
   }
+  mock_resource "google_sql_database_instance" {
+    defaults = { private_ip_address = "10.21.0.3", public_ip_address = "", connection_name = "test-project:asia-northeast3:test-db", ip_address = [] }
+  }
+  mock_resource "google_redis_instance" {
+    defaults = { host = "10.21.1.4", port = 6379 }
+  }
+  mock_resource "google_secret_manager_secret" {
+    defaults = { id = "projects/test-project/secrets/test" }
+  }
+  mock_resource "google_storage_hmac_key" {
+    defaults = { access_id = "GOOGTESTACCESSID", secret = "TESTONLYhmacsecret" }
+  }
 }
 run "root_wiring" {
-  command = plan
+  command = apply
   variables {
     deployment_id       = "fox-gcp-poc01"
     metadata            = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01" }
@@ -20,12 +32,21 @@ run "root_wiring" {
     web_ports           = [80, 443]
     admin_cidrs         = []
     deletion_protection = true
-    network             = { "subnet_cidr" = "10.30.0.0/24", "service_range_address" = "10.31.0.0", "service_range_prefix" = 16 }
+    app                 = { image = "asia-northeast3-docker.pkg.dev/test-project/apps/chiikawa-groupbuy:test" }
+    network             = { "subnet_cidr" = "10.20.0.0/24", "service_range_address" = "10.21.0.0", "service_range_prefix" = 16 }
     sizing              = { "compute_machine_type" = "e2-small", "compute_disk_gib" = 30, "db_tier" = "db-custom-1-3840", "db_storage_gib" = 20, "db_max_storage_gib" = 100, "db_high_availability" = false, "cache_memory_gib" = 1, "cache_high_availability" = false }
   }
   assert {
     condition     = output.handoff.cloud == "gcp" && output.handoff.schema_version == 1
     error_message = "GCP handoff contract must remain stable."
+  }
+  assert {
+    condition     = strcontains(module.app_runtime.script, "oauth2accesstoken") && strcontains(module.app_runtime.script, "chiikawa-groupbuy:test") && !strcontains(module.app_runtime.script, "TESTONLY") && strcontains(module.app_runtime.script, "S3_ENDPOINT=https://storage.googleapis.com")
+    error_message = "The VM must pull from Artifact Registry, use GCS through its S3 API and keep secrets out of metadata."
+  }
+  assert {
+    condition     = output.handoff.database.version == "17" && output.handoff.database.logical_decoding && !output.handoff.cache.tls_required
+    error_message = "PG17 with logical decoding and a plain-RESP cache are the defaults."
   }
 }
 run "reject_open_ssh" {
@@ -42,7 +63,8 @@ run "reject_open_ssh" {
     web_ports           = [80, 443]
     admin_cidrs         = ["0.0.0.0/0"]
     deletion_protection = true
-    network             = { "subnet_cidr" = "10.30.0.0/24", "service_range_address" = "10.31.0.0", "service_range_prefix" = 16 }
+    app                 = { image = "asia-northeast3-docker.pkg.dev/test-project/apps/chiikawa-groupbuy:test" }
+    network             = { "subnet_cidr" = "10.20.0.0/24", "service_range_address" = "10.21.0.0", "service_range_prefix" = 16 }
     sizing              = { "compute_machine_type" = "e2-small", "compute_disk_gib" = 30, "db_tier" = "db-custom-1-3840", "db_storage_gib" = 20, "db_max_storage_gib" = 100, "db_high_availability" = false, "cache_memory_gib" = 1, "cache_high_availability" = false }
   }
   expect_failures = [var.admin_cidrs]
@@ -61,7 +83,8 @@ run "reject_database_public_port" {
     web_ports           = [5432]
     admin_cidrs         = []
     deletion_protection = true
-    network             = { "subnet_cidr" = "10.30.0.0/24", "service_range_address" = "10.31.0.0", "service_range_prefix" = 16 }
+    app                 = { image = "asia-northeast3-docker.pkg.dev/test-project/apps/chiikawa-groupbuy:test" }
+    network             = { "subnet_cidr" = "10.20.0.0/24", "service_range_address" = "10.21.0.0", "service_range_prefix" = 16 }
     sizing              = { "compute_machine_type" = "e2-small", "compute_disk_gib" = 30, "db_tier" = "db-custom-1-3840", "db_storage_gib" = 20, "db_max_storage_gib" = 100, "db_high_availability" = false, "cache_memory_gib" = 1, "cache_high_availability" = false }
   }
   expect_failures = [var.web_ports]
@@ -80,7 +103,8 @@ run "reject_unreviewed_size" {
     web_ports           = [80, 443]
     admin_cidrs         = []
     deletion_protection = true
-    network             = { "subnet_cidr" = "10.30.0.0/24", "service_range_address" = "10.31.0.0", "service_range_prefix" = 16 }
+    app                 = { image = "asia-northeast3-docker.pkg.dev/test-project/apps/chiikawa-groupbuy:test" }
+    network             = { "subnet_cidr" = "10.20.0.0/24", "service_range_address" = "10.21.0.0", "service_range_prefix" = 16 }
     sizing              = { "compute_machine_type" = "a3-highgpu-8g" }
   }
   expect_failures = [var.sizing]
@@ -101,6 +125,11 @@ run "private_database" {
     database_name       = "app"
     app_service_account = "app@test-project.iam.gserviceaccount.com"
     deletion_protection = true
+    admin_password      = "TESTONLYadminpassword"
+  }
+  assert {
+    condition     = google_sql_database_instance.this.database_version == "POSTGRES_17" && { for f in google_sql_database_instance.this.settings[0].database_flags : f.name => f.value }["cloudsql.logical_decoding"] == "on"
+    error_message = "PostgreSQL 17 with logical decoding is required by the DB migration agent."
   }
   assert {
     condition     = !google_sql_database_instance.this.settings[0].ip_configuration[0].ipv4_enabled && google_sql_database_instance.this.settings[0].ip_configuration[0].ssl_mode == "ENCRYPTED_ONLY"
@@ -128,7 +157,7 @@ run "private_storage" {
     error_message = "Versioning and nonempty-bucket deletion protection are required."
   }
 }
-run "cache_requires_auth_and_tls" {
+run "cache_plain_resp_by_default" {
   command = plan
   module { source = "../../modules/gcp/memorystore" }
   variables {
@@ -141,8 +170,8 @@ run "cache_requires_auth_and_tls" {
     high_availability  = false
   }
   assert {
-    condition     = google_redis_instance.this.auth_enabled && google_redis_instance.this.transit_encryption_mode == "SERVER_AUTHENTICATION"
-    error_message = "Memorystore requires AUTH and TLS."
+    condition     = !google_redis_instance.this.auth_enabled && google_redis_instance.this.transit_encryption_mode == "DISABLED"
+    error_message = "The team's Redis proxy speaks plain RESP to its backends."
   }
   assert {
     condition     = google_redis_instance.this.redis_configs == tomap({ "notify-keyspace-events" = "KEA", "maxmemory-policy" = "noeviction" })

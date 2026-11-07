@@ -56,3 +56,8 @@ variable "enable_cloudflare_tunnel" {
   nullable    = false
   description = "cloudflared용 outbound TCP/UDP 7844. 터널 설치/등록은 별도 배포."
 }
+
+variable "enable_tailscale" {
+  type    = bool
+  default = false
+}

@@ -30,17 +30,23 @@ variable "key_name" {
 }
 variable "postgres_version" {
   type        = string
-  default     = "16"
-  description = "PostgreSQL 16 또는 해당 minor. 실행 전 리전 지원 버전 확인. AI 입력에서 제외합니다."
+  default     = "17"
+  description = "PostgreSQL 17 또는 해당 minor. DB 이전 에이전트의 직접 논리 복제 프로필이 RDS 17 → Cloud SQL 17을 지원합니다. AI 입력에서 제외합니다."
   validation {
-    condition     = can(regex("^16(\\.[0-9]+)?$", var.postgres_version))
-    error_message = "이 초안의 parameter group은 PostgreSQL 16 전용입니다."
+    condition     = can(regex("^17(\\.[0-9]+)?$", var.postgres_version))
+    error_message = "parameter group은 PostgreSQL 17 전용입니다."
   }
+}
+variable "redis_transit_encryption" {
+  type        = bool
+  default     = false
+  description = "ElastiCache TLS·AUTH. 팀 Redis 프록시가 TLS 백엔드를 지원하지 않아 기본은 끕니다."
 }
 variable "redis_auth_token" {
   type        = string
+  default     = null
   sensitive   = true
-  description = "TF_VAR_redis_auth_token 또는 비밀 저장소 주입. tfvars/Git/추천 JSON에 기록하지 않습니다."
+  description = "redis_transit_encryption=true일 때만. TF_VAR_redis_auth_token 또는 비밀 저장소 주입. tfvars/Git/추천 JSON에 기록하지 않습니다."
 }
 variable "final_snapshot_identifier" {
   type        = string

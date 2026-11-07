@@ -32,3 +32,12 @@ variable "high_availability" {
   type        = bool
   description = "STANDARD_HA 사용"
 }
+
+variable "auth_enabled" {
+  type    = bool
+  default = false
+}
+variable "transit_encryption" {
+  type    = bool
+  default = false
+}

@@ -7,6 +7,7 @@ provider "registry.terraform.io/hashicorp/aws" {
   hashes = [
     "h1:aLOQts7nCLMR0kb/jCdP56wlQQoGqhKLctKgtQjDopc=",
     "h1:rMbzU/i9txGvoI/hiB6EMln0NlmxM/61SrI9XBvI41Q=",
+    "h1:sZCupscga0Grk22+04FNY1RYDeOcVbCTd6ff8+hsF94=",
     "zh:09aa14408c5ab26915fb2a469b5eb67c06393a2054d78592ba4c32f7a882e918",
     "zh:1d1138128dc4866f6c16b1ef3b871b3fd9a3dc648e9056e06e210d1817aa052b",
     "zh:2c17a79821a0e06fbf1834a12e92227db29c2001fef7ef0b347af2e6dad83f14",
@@ -23,5 +24,28 @@ provider "registry.terraform.io/hashicorp/aws" {
     "zh:d4ca164b1b6039557d8f5f5f911c4aaad1a187e9b3758f6885c95f8954f7de58",
     "zh:eb0c705337cef7b96086e8b84702ba965eeeace7a4aa3235b2c8aad5f50f2fca",
     "zh:f2787f40ce873d8c1308c92adec9b6adbd223506fe9d79bba447729e422f9146",
+  ]
+}
+
+provider "registry.terraform.io/hashicorp/random" {
+  version     = "3.9.1"
+  constraints = "~> 3.6"
+  hashes = [
+    "h1:7uiStw0Rl9KOdX5UNMG/sp9nyadoD4LZekQTiYlYPhE=",
+    "h1:PlW+UZ4EElQF3NQwf41KQwavFujab3Czc51zu9dyVM8=",
+    "h1:g40qr7yDmIpaur4SsK5BcOda3HSo1RJ6zHVMqN4EJ+0=",
+    "zh:05f4734c1f0be840b711b3eff259ebc5fca436784c728955b1678078466f48d7",
+    "zh:0b91bf19371d012434eba1deeb6aab77158def9b39601dcbd94450b3974a2a26",
+    "zh:0ee6eacd47ec00183d55d726a4b6c4ce951a199f944bf22f1aa58392ebdfa7a2",
+    "zh:19388a4074b76a89a43a6c8328d7ae8ee2e7de3d346af51e80d3e6d3d12925f1",
+    "zh:23e74d48c5e2ac2e823fd527f49fee9db37d32a1990c9e3bf126ead697b843eb",
+    "zh:3cabf7fbd096c520064aae3aba61aba670af83ab91291a71fa1b1332929c2b7f",
+    "zh:5c0a3b8af0be60be4eca12ddee385cfa8babc1ec8e98cdf9de2f2274c73eabfa",
+    "zh:60b4f8a8ef18f52bf8e19215229dae408bee732825964092db7c989fd2de4097",
+    "zh:7359015acfedcbd6366f2329c854cf8d3c8ca5cd0faa89d2d37db358d6eba6c5",
+    "zh:78d5eefdd9e494defcb3c68d282b8f96630502cac21d1ea161f53cfe9bb483b3",
+    "zh:7b38758402f0e13a1071162da28994023cd2ac676e54af350c9ffd8dfa73fa7b",
+    "zh:7c7fbb8895eb75bb4de1f933e98553bd99c8d048c89a925ddba490aa5a67f7dc",
+    "zh:8c2b8c6a7ccdec16b73e2fb9f3700ea097f58c592571e4c5de60c93d2301732c",
   ]
 }

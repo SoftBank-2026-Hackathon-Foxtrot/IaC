@@ -8,6 +8,7 @@ resource "google_compute_instance" "this" {
   zone                      = var.zone
   machine_type              = var.machine_type
   allow_stopping_for_update = true
+  can_ip_forward            = var.can_ip_forward
   boot_disk {
     initialize_params {
       image  = var.image
@@ -28,6 +29,7 @@ resource "google_compute_instance" "this" {
     enable-oslogin         = "TRUE"
     block-project-ssh-keys = "TRUE"
     serial-port-enable     = "FALSE"
+    startup-script         = var.startup_script
   }
   shielded_instance_config {
     enable_secure_boot          = true
