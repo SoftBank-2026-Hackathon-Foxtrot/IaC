@@ -25,16 +25,16 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        cloud: [aws, gcp]
+        directory: [environments/aws, environments/gcp, environments/tailscale/aws, environments/tailscale/gcp, modules/tailscale_bootstrap, environments/foundation/aws, environments/foundation/gcp, environments/platform/aws]
     defaults:
       run:
-        working-directory: environments/${{ matrix.cloud }}
+        working-directory: ${{ matrix.directory }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.13.5'
-      - run: terraform fmt -check -recursive ../..
+      - run: terraform fmt -check -recursive "$GITHUB_WORKSPACE"
       - run: terraform init -backend=false -input=false -lockfile=readonly
       - run: terraform validate -no-color
       - run: terraform test -no-color

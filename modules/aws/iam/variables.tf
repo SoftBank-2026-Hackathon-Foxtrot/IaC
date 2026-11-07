@@ -12,3 +12,9 @@ variable "bucket_arn" {
   type        = string
   description = "앱이 접근할 단일 bucket ARN"
 }
+
+variable "secret_arns" {
+  type        = list(string)
+  default     = []
+  description = "앱 VM이 부팅할 때 읽는 Secrets Manager ARN"
+}

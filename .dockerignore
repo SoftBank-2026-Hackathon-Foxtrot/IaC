@@ -1,0 +1,6 @@
+.git
+**/.terraform
+**/*.tfstate*
+**/*.tfplan
+provisioner/config.json
+**/__pycache__

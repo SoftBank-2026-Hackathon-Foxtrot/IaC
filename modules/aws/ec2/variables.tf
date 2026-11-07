@@ -43,3 +43,15 @@ variable "key_name" {
   description = "SSH를 사용할 때 기존 EC2 key pair 이름"
   default     = null
 }
+
+variable "user_data" {
+  type        = string
+  default     = null
+  description = "첫 부팅 때 실행할 스크립트. 바뀌면 인스턴스를 교체합니다."
+}
+
+variable "source_dest_check" {
+  type        = bool
+  default     = true
+  description = "false: 남의 주소로 가는 패킷을 전달 (Tailscale 서브넷 라우터)"
+}

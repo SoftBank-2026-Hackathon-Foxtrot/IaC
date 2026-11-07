@@ -4,12 +4,14 @@
 
 Terraform 모듈 `v0.1` / 연동 계약 `v0.3` / PoC·개발 환경 전용. Kubernetes는 필요하지 않습니다.
 
+**새로: 첫 배포부터 IaC로.** 각 루트가 네트워크·데이터 저장소와 함께 레지스트리 이미지로 **실행 중인 앱**까지 만듭니다. `python -m provisioner up --org chiikawa --cloud aws` 한 줄, 또는 org·클라우드를 본문으로 받는 `POST /v1/environments` API로 띄웁니다. → [앱 환경 프로비저닝](docs/environment-provisioning.md)
+
 ## 무엇을 만드는가
 
 | 역할 | AWS | GCP |
 |---|---|---|
-| 앱 서버 | EC2 + 고정 공인 IP | Compute Engine + 고정 공인 IP |
-| 데이터베이스 | RDS PostgreSQL 16 | Cloud SQL PostgreSQL 16 |
+| 앱 서버 | EC2 + 고정 공인 IP, 부팅 때 ECR 이미지로 앱 실행 | Compute Engine + 고정 공인 IP, 부팅 때 Artifact Registry 이미지로 앱 실행 |
+| 데이터베이스 | RDS PostgreSQL 17 (논리 복제) | Cloud SQL PostgreSQL 17 (논리 디코딩) |
 | 캐시 | ElastiCache Redis 7.1 | Memorystore Redis 7.0 |
 | 파일 저장소 | S3 | Cloud Storage |
 | 네트워크 | 전용 VPC, public 앱 subnet, 2개 private 데이터 subnet, SG | 전용 VPC, 앱 subnet, Private Service Access, firewall |
@@ -28,10 +30,13 @@ flowchart LR
   A --> O[진행 상태·인프라 출력 인계]
 ```
 
-AI 추천 API/모델 호출, 사용자 승인 UI, apply 실행기, 실제 비용 수집기는 이 초안의 범위 밖입니다. 추천 JSON을 받아 안전하게 입력 파일로 만드는 작은 도구는 포함합니다.
+앱 환경 plan/apply는 `provisioner/`가 실행합니다. AI 추천 API/모델 호출, 사용자 승인 UI, 실제 비용 수집기는 이 초안의 범위 밖입니다. 추천 JSON을 받아 안전하게 입력 파일로 만드는 작은 도구는 포함합니다.
 
 ## 먼저 볼 파일
 
+- [main 통합과 준비 상태](docs/release-integration.md) — 기존 입력 호환, 인프라/앱 준비 구분, 공유 Tailscale, 관측 연결
+
+- [앱 환경 프로비저닝](docs/environment-provisioning.md) — 앱 환경 생성·수정·삭제 CLI와 API
 - [EC2 → GCE 전환·롤백 검증 기록](docs/compute-cloud-rehearsal.md) — 세션 요청 291건 성공, WebSocket·주문 확인, 임시 자원 정리
 - [Notion 팀 공유 요약](https://app.notion.com/p/410b7958f327817b97c3faba860ec22b) — 검증 결과와 다음 통합 작업
 - [COMPUTE 호출 방법](compute/README.md) — 컨트롤 플레인에서 계획 등록, 컨테이너 준비·기동, 결과 조회
@@ -56,11 +61,13 @@ modules/
   metadata/             # 공통 식별·비용·보안 분류 메타데이터 검증
   aws/
     vpc/ security_groups/ iam/ ec2/ rds/ elasticache/ s3/
+  app_runtime/          # 레지스트리 이미지로 앱을 띄우는 부팅 스크립트 (두 클라우드 공용)
   gcp/
     network/ firewall/ iam/ compute/ cloud_sql/ memorystore/ storage/
 catalog/                # 플랫폼/AI가 사용하는 사양 allowlist
 examples/               # 추천 JSON, backend 설정 샘플
 tools/render_inputs.py  # 입력 검사·UI 변경값/추천값 병합 (Python 표준 라이브러리)
+provisioner/            # 환경 생성 API·CLI: org·cloud 요청 → Terraform plan/apply/destroy (표준 라이브러리)
 contracts/              # 프로비저닝 OpenAPI와 UI/팀 연동용 JSON 예시
 tools/build_contract.py # 카탈로그를 반영한 명세·예시 생성기 (API 서버 아님)
 tests/                  # AI 입력 경계·CIDR 검사 회귀 테스트
@@ -71,10 +78,10 @@ docs/                   # 설계·플랫폼 계약·운영 절차
 
 ## 기본 동작
 
-- **앱 서버만 public:** 기본 웹 TCP 80/443 공개. 앱 설치·TLS 인증서는 별도 배포 작업입니다.
+- **앱 서버만 public:** 기본 웹 TCP 80/443 공개. 앱은 부팅 스크립트가 컨테이너로 실행합니다. TLS 인증서는 Cloudflare Tunnel 또는 별도 작업입니다.
 - **SSH는 기본 닫힘:** AWS는 SSM을 기본 관리 경로로 사용합니다. SSH가 필요하면 관리자 `/24~32` CIDR과 기존 key pair를 사람이 지정합니다. GCP는 OS Login 사용자 권한도 필요합니다.
 - **데이터는 private:** DB·캐시에 공인 접속 경로를 만들지 않습니다. AWS는 앱 SG에서만 접근하도록 구성합니다. GCP는 전용 VPC/PSA와 앱 SA 대상 egress를 사용합니다.
-- **암호화·인증:** DB TLS, Redis TLS+AUTH, 비공개 버킷, 저장소 버전 관리, 암호화 디스크.
+- **암호화·인증:** DB TLS, 비공개 버킷, 저장소 버전 관리, 암호화 디스크. Redis TLS·AUTH는 선택이며 기본은 꺼짐입니다. 팀 Redis 프록시가 TLS 백엔드를 지원하지 않기 때문이고, 접근은 SG·VPC로 제한합니다.
 - **데이터 보호:** DB 삭제 보호 기본 활성화, RDS final snapshot, Cloud SQL PITR, 비어 있지 않은 버킷 강제 삭제 금지.
 - **PoC는 단일 서버:** HA DB/cache 선택은 가능하지만 앱까지 고가용성이 되는 것은 아닙니다.
 
@@ -128,3 +135,7 @@ python tools/render_inputs.py render --cloud aws \
 - 비용 수집·보안 점검 결과 저장소와 원본 자원 ID 연결 방식.
 
 위 항목을 확정하지 않은 상태를 프로덕션 준비 완료로 표시하지 않습니다.
+
+## 마이그레이션 관측
+
+실제 PLAN/APPLY와 COMPUTE 준비 결과를 컨트롤 플레인으로 보고하는 방법은 [관측 연결](docs/migration-observability.md)을 참고하세요.

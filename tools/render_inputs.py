@@ -6,6 +6,7 @@ Python standard library only; run from any working directory.
 import argparse
 import copy
 import ipaddress
+import re
 import json
 import math
 import sys
@@ -61,6 +62,26 @@ def ipv4(cidr):
     return result
 
 
+APP_KEYS = {"image", "port", "api_workers", "worker_count", "served_by", "seed_demo_data", "seed_close_in_s",
+            "env", "api_env", "worker_env", "secret_env", "tunnel_secret", "cloudflared_image", "health_path"}
+REGISTRY = {"aws": r"^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/", "gcp": r"^[a-z0-9-]+-docker\.pkg\.dev/"}
+
+
+def validate_app(cloud, app):
+    """The app image must already be in this cloud's registry; secrets only travel as references."""
+    require(type(app) is dict and type(app.get("image")) is str, "app.image is required")
+    require(not (app.keys() - APP_KEYS), "Unknown app key")
+    require(re.match(REGISTRY[cloud], app["image"]) is not None, f"app.image must be in the {cloud} registry")
+    path = app.get("health_path", "/readyz")
+    require(type(path) is str and re.fullmatch(r"/[A-Za-z0-9_./-]*", path) is not None and not path.startswith("//"),
+            "app.health_path must be a local HTTP path")
+    for field in ("env", "api_env", "worker_env", "secret_env"):
+        values = app.get(field, {})
+        require(type(values) is dict and all(type(v) is str and "\n" not in v and "'" not in v for v in values.values()),
+                f"app.{field}: expected single-line strings")
+        require(all(re.match(r"^[A-Z_][A-Z0-9_]*$", k) for k in values), f"app.{field}: env names are UPPER_CASE")
+
+
 def validate_config(cloud, config):
     require(type(config) is dict, "Baseline must be a JSON object")
     common = {"deployment_id", "metadata", "region", "bucket_name", "database_name",
@@ -68,7 +89,9 @@ def validate_config(cloud, config):
     extras = {"aws": {"account_id", "ami_id", "key_name", "postgres_version", "final_snapshot_identifier"},
               "gcp": {"project_id", "zone", "image"}}
     require(cloud in extras, "Unsupported cloud")
-    optional = {"proxy_cidrs", "enable_cloudflare_tunnel"} | ({"migration_source_cidrs"} if cloud == "aws" else set())
+    optional = {"app", "postgres_version", "proxy_cidrs", "enable_cloudflare_tunnel", "force_destroy_storage", "tailscale"} | (
+        {"migration_source_cidrs", "replication_cidrs", "redis_transit_encryption"} if cloud == "aws"
+        else {"db_authorized_networks", "redis_auth", "redis_transit_encryption"})
     require(not (config.keys() - common - extras[cloud] - optional), "Unknown baseline key; keep secrets outside JSON")
     required = common | ({"account_id", "final_snapshot_identifier"} if cloud == "aws" else {"project_id", "zone"})
     require(required <= config.keys(), "Missing required human-owned deployment settings")
@@ -81,6 +104,8 @@ def validate_config(cloud, config):
                 require(n.prefixlen >= 24 and any(n.subnet_of(a) for a in allowed),
                         f"{field}: use private or Tailscale IPv4 /24 through /32")
     require(type(config.get("enable_cloudflare_tunnel", False)) is bool, "enable_cloudflare_tunnel: expected boolean")
+    if config.get("app") is not None:
+        validate_app(cloud, config["app"])
     validate_sizing(cloud, config["sizing"])
     require(config["web_ports"] and all(type(p) is int and p in (80, 443, 8080) for p in config["web_ports"]),
             "Only reviewed public application ports are allowed")

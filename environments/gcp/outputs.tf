@@ -1,15 +1,36 @@
 output "handoff" {
-  description = "비밀값 없는 인계 계약. SQL IAM 사용자의 SQL GRANT와 앱 connector 설정은 후속 작업입니다."
+  description = "비밀값 없는 인계 계약. 비밀값은 Secret Manager 참조로만 전달합니다."
   value = {
     schema_version = 1
     cloud          = "gcp"
     deployment_id  = var.deployment_id
     metadata       = module.metadata.common
     compute        = { id = module.compute.instance_id, public_ip = module.compute.public_ip, private_ip = module.compute.private_ip, identity = module.iam.service_account_email }
-    database       = { id = module.cloud_sql.instance_name, host = module.cloud_sql.private_ip, port = 5432, name = var.database_name, connection_name = module.cloud_sql.connection_name, app_db_user = module.cloud_sql.app_db_user, tls_required = true, auth_mode = "cloud-sql-iam-connector" }
-    cache          = { id = module.memorystore.id, host = module.memorystore.host, port = module.memorystore.port, tls_required = true, auth_source = "memorystore-get-auth-string-via-authorized-bootstrap", server_ca_certs = module.memorystore.server_ca_certs }
+    database       = { id = module.cloud_sql.instance_name, host = module.cloud_sql.private_ip, port = 5432, name = var.database_name, engine = "postgres", version = local.postgres_version, connection_name = module.cloud_sql.connection_name, app_db_user = module.cloud_sql.app_db_user, auth_mode = var.app == null ? "cloud-sql-iam-connector" : "password-secret-manager", public_ip = module.cloud_sql.public_ip, outgoing_ip = module.cloud_sql.outgoing_ip, tls_required = true, logical_decoding = true, admin_user = module.cloud_sql.admin_user, admin_secret_ref = google_secret_manager_secret.db_admin.id, app_user = var.app == null ? null : local.app_db_user, app_secret_ref = var.app == null ? null : google_secret_manager_secret.app_db.id }
+    cache          = { id = module.memorystore.id, host = module.memorystore.host, port = module.memorystore.port, tls_required = local.redis_transit_encryption, auth_enabled = local.redis_auth, auth_source = local.redis_auth ? "memorystore-get-auth-string-via-authorized-bootstrap" : "none-vpc-only", server_ca_certs = module.memorystore.server_ca_certs }
     storage        = { id = module.storage.url, name = module.storage.bucket_name }
     network        = { id = module.network.network_id, subnetwork_id = module.network.subnetwork_id }
-    pending_checks = ["application-deployment", "database-grants-and-schema", "cache-auth-delivery", "replication-connectivity", "application-smoke-test"]
+    app            = var.app == null ? null : { image = var.app.image, url = "http://${module.compute.public_ip}${var.app.port == 80 ? "" : ":${var.app.port}"}", env_keys = module.app_runtime[0].app_env_keys, boot_log = "/var/log/foxtrot-app.log", health_path = var.app.health_path }
+    router_inputs  = local.router_inputs
+    pending_checks = var.app == null ? ["application-deployment", "database-grants-and-schema", "cache-auth-delivery", "replication-connectivity", "application-smoke-test"] : ["application-boot-log", "application-smoke-test"]
   }
 }
+
+locals {
+  router_inputs = {
+    name                          = "${var.deployment_id}-router"
+    project_id                    = var.project_id
+    region                        = var.region
+    zone                          = var.zone
+    network_name                  = module.network.network_name
+    subnetwork_name               = module.network.subnetwork_name
+    service_cidrs                 = ["${var.network.service_range_address}/${var.network.service_range_prefix}"]
+    private_services_peering_name = module.network.private_services_peering_name
+    client_service_account_emails = [module.iam.service_account_email]
+    app_ports                     = var.app == null ? [] : [var.app.port]
+    service_ports                 = [6432, 8080, 8000, 7000]
+    redis_ports                   = [local.redis_transit_encryption ? 6378 : 6379]
+    auth_key_secret_id            = try(element(reverse(split("/", var.tailscale.auth_key_secret)), 0), null)
+  }
+}
+output "router_inputs" { value = local.router_inputs }

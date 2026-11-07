@@ -29,7 +29,7 @@ provider "google" {
   zone    = var.zone
 }
 resource "google_project_service" "required" {
-  for_each           = toset(["compute.googleapis.com", "iam.googleapis.com", "sqladmin.googleapis.com", "redis.googleapis.com", "servicenetworking.googleapis.com", "storage.googleapis.com", "logging.googleapis.com", "monitoring.googleapis.com", "oslogin.googleapis.com"])
+  for_each           = toset(["compute.googleapis.com", "iam.googleapis.com", "sqladmin.googleapis.com", "redis.googleapis.com", "servicenetworking.googleapis.com", "storage.googleapis.com", "logging.googleapis.com", "monitoring.googleapis.com", "oslogin.googleapis.com", "artifactregistry.googleapis.com", "secretmanager.googleapis.com", "cloudresourcemanager.googleapis.com"])
   project            = var.project_id
   service            = each.value
   disable_on_destroy = false
@@ -52,4 +52,18 @@ variable "enable_cloudflare_tunnel" {
   default     = false
   nullable    = false
   description = "cloudflared용 outbound TCP/UDP 7844. 터널 설치/등록은 별도 배포."
+}
+
+variable "postgres_version" {
+  type    = string
+  default = null
+  validation {
+    condition     = var.postgres_version == null ? true : contains(["16", "17"], var.postgres_version)
+    error_message = "Use PostgreSQL 16 or 17."
+  }
+}
+locals {
+  postgres_version         = coalesce(var.postgres_version, var.app == null ? "16" : "17")
+  redis_auth               = coalesce(var.redis_auth, var.app == null)
+  redis_transit_encryption = coalesce(var.redis_transit_encryption, var.app == null)
 }

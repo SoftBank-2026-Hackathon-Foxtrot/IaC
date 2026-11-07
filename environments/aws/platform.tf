@@ -30,17 +30,23 @@ variable "key_name" {
 }
 variable "postgres_version" {
   type        = string
-  default     = "16"
-  description = "PostgreSQL 16 또는 해당 minor. 실행 전 리전 지원 버전 확인. AI 입력에서 제외합니다."
+  default     = null
+  description = "PostgreSQL 17 또는 해당 minor. DB 이전 에이전트의 직접 논리 복제 프로필이 RDS 17 → Cloud SQL 17을 지원합니다. AI 입력에서 제외합니다."
   validation {
-    condition     = can(regex("^16(\\.[0-9]+)?$", var.postgres_version))
-    error_message = "이 초안의 parameter group은 PostgreSQL 16 전용입니다."
+    condition     = var.postgres_version == null ? true : can(regex("^(16|17)(\\.[0-9]+)?$", var.postgres_version))
+    error_message = "PostgreSQL 16 또는 17을 지정하세요."
   }
+}
+variable "redis_transit_encryption" {
+  type        = bool
+  default     = null
+  description = "ElastiCache TLS·AUTH. 팀 Redis 프록시가 TLS 백엔드를 지원하지 않아 기본은 끕니다."
 }
 variable "redis_auth_token" {
   type        = string
+  default     = null
   sensitive   = true
-  description = "TF_VAR_redis_auth_token 또는 비밀 저장소 주입. tfvars/Git/추천 JSON에 기록하지 않습니다."
+  description = "redis_transit_encryption=true일 때만. TF_VAR_redis_auth_token 또는 비밀 저장소 주입. tfvars/Git/추천 JSON에 기록하지 않습니다."
 }
 variable "final_snapshot_identifier" {
   type        = string
@@ -94,4 +100,9 @@ variable "migration_source_cidrs" {
     can(regex("^(10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\\.)", cidrhost(c, 0))), false)])
     error_message = "Use explicit RFC1918 or Tailscale IPv4 CIDRs, /24 through /32."
   }
+}
+
+locals {
+  postgres_version         = coalesce(var.postgres_version, var.app == null ? "16" : "17")
+  redis_transit_encryption = coalesce(var.redis_transit_encryption, var.app == null)
 }

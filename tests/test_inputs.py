@@ -12,6 +12,19 @@ spec.loader.exec_module(inputs)
 
 
 class InputsTest(unittest.TestCase):
+    def test_legacy_baseline_without_app_still_accepts_sizing_changes(self):
+        for cloud in ("aws", "gcp"):
+            baseline = self.base(cloud)
+            baseline.pop("app")
+            if cloud == "aws":
+                baseline["postgres_version"] = "16"
+            rendered = inputs.merge_overrides(cloud, baseline, {"compute_disk_gib": 40})
+            self.assertNotIn("app", rendered)
+            self.assertEqual(rendered["sizing"]["compute_disk_gib"], 40)
+            baseline["app"] = {}
+            with self.assertRaises(ValueError):
+                inputs.validate_config(cloud, baseline)
+
     def base(self, cloud="aws"):
         return inputs.load_json(ROOT / f"environments/{cloud}/deployment.example.tfvars.json")
 
@@ -82,13 +95,13 @@ class InputsTest(unittest.TestCase):
             inputs.merge_recommendation("aws", base, self.proposal({"compute_disk_gib":40}))
 
     def test_cidr_overlap_and_outside_vpc_rejected(self):
-        for cidr in ("10.20.0.0/24", "10.99.0.0/24"):
+        for cidr in ("10.10.0.0/24", "10.99.0.0/24"):
             base = self.base()
             base["network"]["private_subnet_cidrs"][0] = cidr
             with self.assertRaises(ValueError):
                 inputs.validate_config("aws", base)
         base = self.base("gcp")
-        base["network"]["service_range_address"] = "10.30.0.0"
+        base["network"]["service_range_address"] = "10.20.0.0"
         with self.assertRaises(ValueError):
             inputs.validate_config("gcp", base)
 
