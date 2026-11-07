@@ -96,6 +96,8 @@ def render(req: dict, catalog: dict, config: dict, suffix: str, today: dt.date) 
     # platform's proxies so a migration can swap what is behind them. Request env wins.
     if config.get("appEnv"):
         app["env"] = {**config["appEnv"], **app.get("env", {})}
+    if config.get("workload"):
+        _workload_reporting(app, config["workload"], req["org"]["id"], cloud)
 
     tfvars = copy.deepcopy(cloud_conf["baseline"])
     target = req["target"]
@@ -143,3 +145,23 @@ def render(req: dict, catalog: dict, config: dict, suffix: str, today: dt.date) 
     except ValueError as exc:
         raise RequestError(str(exc)) from exc
     return tfvars
+
+
+def _workload_reporting(app: dict, workload: dict, org_id: str, cloud: str) -> None:
+    """Server config "workload": every app process reports to the control plane and follows its
+    RUN/HOLD order and the object route (demo app/workload.py, control-plane app-integration).
+
+    Names follow the control-plane seed: actors <org>-<cloud>-api and <org>-<cloud>-worker in
+    scope:<org>. The token reaches the VM as a secret of its own cloud. Request values win."""
+    token = workload.get("tokenSecrets", {}).get(cloud)
+    require(token is not None, f"workload.tokenSecrets.{cloud} is not configured")
+    app["env"] = {
+        "CONTROL_PLANE_URL": workload["controlPlaneUrl"],
+        "WORKLOAD_SCOPE": f"scope:{org_id}",
+        # The reporting thread writes the receipt bucket's migration ID here; objroute reads it.
+        "OBJECT_MIGRATION_ID_FILE": "/tmp/object-migration-id",
+        **app.get("env", {}),
+    }
+    app["api_env"] = {"WORKLOAD_ACTOR": f"{org_id}-{cloud}-api", **app.get("api_env", {})}
+    app["worker_env"] = {"WORKLOAD_ACTOR": f"{org_id}-{cloud}-worker", **app.get("worker_env", {})}
+    app["secret_env"] = {"WORKLOAD_TOKEN": token, **app.get("secret_env", {})}

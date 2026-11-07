@@ -285,6 +285,12 @@ locals {
       REDIS_URL               = "redis://redis-proxy.internal:6379"
       OBJECT_MIGRATION_SERVER = "http://object-migration.internal:8080"
     }
+    # Every app process reports to the control plane (RUN/HOLD, object route). Actor names are
+    # <org>-<cloud>-api/-worker in scope:<org>; the seed's environments.*.actors must match.
+    workload = {
+      controlPlaneUrl = "http://control-plane.internal:8000"
+      tokenSecrets    = { aws = local.secret_arn["workload-token"], gcp = google_secret_manager_secret.workload_token.id }
+    }
     clouds = {
       aws = merge(local.provisioner_baseline.aws, {
         accounts      = [data.aws_caller_identity.current.account_id]
