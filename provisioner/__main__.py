@@ -39,24 +39,40 @@ def load(path: str | None) -> tuple[dict, dict]:
 def build(config: dict, catalog: dict) -> Service:
     work = Path(config["workRoot"])
     work.mkdir(parents=True, exist_ok=True)
-    terraform = Terraform(HERE.parent, work, binary=os.environ.get("TERRAFORM_BIN", "terraform"), state=config.get("stateBackend"))
-    service = Service(Store(work / "provisioner.db"), terraform, catalog, config)
-    if config.get("onprem"):
-        from .inventory import Inventory
-        from .onprem import OnPremService
-        from .onprem_store import OnPremStore
-        from .drivers.ansible import AnsibleDriver
-        settings = config["onprem"]
-        inventory = Inventory(settings["catalogFile"], settings["secretRoot"],
-                              allow_local=settings.get("allowLocal", False))
-        service.onprem = OnPremService(OnPremStore(work / "provisioner.db"), inventory,
-                                      AnsibleDriver(HERE.parent, work / "ansible", inventory),
-                                      service.checker)
+    if cache := os.environ.get("TF_PLUGIN_CACHE_DIR"):
+        Path(cache).mkdir(parents=True, exist_ok=True)
+    terraform = Terraform(
+        HERE.parent,
+        work,
+        binary=os.environ.get("TERRAFORM_BIN", "terraform"),
+        state=config.get("stateBackend"),
+    )
+    from .node import DeploymentExecutor
+    from .node_registration import configure
+    from .readiness import AppChecker
+
+    telemetry = dict(config.get("appTelemetry") or {})
+    if config.get("applicationId"):
+        telemetry["applicationId"] = config["applicationId"]
+    executor = DeploymentExecutor(terraform, {}, telemetry)
+    service = Service(
+        Store(work / "provisioner.db"),
+        executor,
+        catalog,
+        config,
+        checker=AppChecker(config.get("readiness"), node_checker=executor.check),
+    )
+
+    configure(service, executor, config, work, HERE.parent)
     return service
 
 
 def request_from(args) -> dict:
     body = {"org": {"id": args.org}, "cloud": args.cloud, "app": {"template": args.template}}
+    if args.cloud == "onprem":
+        body["target"] = {"nodeId": args.node_id}
+        if args.preparation_id:
+            body["target"]["preparationId"] = args.preparation_id
     if args.image:
         body["app"]["image"] = args.image
     if args.plan_only:
@@ -76,7 +92,9 @@ def main() -> None:
     for name in ("up", "render"):
         p = sub.add_parser(name)
         p.add_argument("--org", required=True)
-        p.add_argument("--cloud", required=True, choices=["aws", "gcp"])
+        p.add_argument("--cloud", required=True, choices=["aws", "gcp", "onprem"])
+        p.add_argument("--node-id", help="operator-registered on-prem app node")
+        p.add_argument("--preparation-id", help="completed v2 data-service preparation")
         p.add_argument("--template", default="chiikawa-groupbuy")
         p.add_argument("--image", help="override the configured registry image")
         p.add_argument("--workflow-id", help="control-plane workflow to receive preparation observations")

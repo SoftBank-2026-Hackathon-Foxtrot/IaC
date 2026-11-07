@@ -19,6 +19,7 @@ import json
 import secrets
 import threading
 import uuid
+from functools import wraps
 
 from tools.telemetry import get_telemetry
 from opentelemetry.trace import Status, StatusCode
@@ -46,6 +47,15 @@ def now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
+def admission(function):
+    @wraps(function)
+    def run(self, *args, **kwargs):
+        with self.store.lock:
+            return function(self, *args, **kwargs)
+
+    return run
+
+
 class Service:
     def __init__(self, store: Store, terraform: Terraform, catalog: dict, config: dict, checker=None):
         self.store, self.tf, self.catalog, self.config = store, terraform, catalog, config
@@ -56,54 +66,114 @@ class Service:
         self.today = lambda: dt.date.today()
 
     # --- requests ---------------------------------------------------------------------------
+    @admission
     def create(self, body: dict, idempotency_key: str | None = None) -> tuple[int, dict]:
         digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
         if idempotency_key:
             seen = self.store.remembered(idempotency_key)
             if seen:
                 if seen[0] != digest:
-                    raise Conflict("IDEMPOTENCY_CONFLICT", "this Idempotency-Key was used with a different body")
+                    raise Conflict(
+                        "IDEMPOTENCY_CONFLICT",
+                        "this Idempotency-Key was used with a different body",
+                    )
                 return seen[1], seen[2]
         req = spec.parse(body, self.catalog, self.config)
         existing = self.store.active_environment(req["org"]["id"], req["cloud"], req["template"])
         if existing:
-            raise Conflict("ENVIRONMENT_EXISTS", "this org already has an active environment of this app on this cloud",
-                           environmentId=existing["id"])
+            raise Conflict(
+                "ENVIRONMENT_EXISTS",
+                "this org already has an active environment of this app on this cloud",
+                environmentId=existing["id"],
+            )
         suffix = secrets.token_hex(2)
         tfvars = spec.render(req, self.catalog, self.config, suffix, self.today())
+        if req["cloud"] == "onprem":
+            for other in self.store.environments():
+                if (
+                    other["cloud"] == "onprem"
+                    and other["status"] != "DESTROYED"
+                    and other["tfvars"].get("node_id") == tfvars["node_id"]
+                ):
+                    raise Conflict(
+                        "NODE_RESERVED",
+                        "remove the existing app deployment before reusing this node",
+                    )
+            # Check registration, ownership and preparation before queueing remote work.
+            self.tf.resolve(tfvars)
         env_id = f"env-{uuid.uuid4().hex[:12]}"
         stamp = now()
-        self.store.insert_environment({
-            "id": env_id, "org_id": req["org"]["id"], "cloud": req["cloud"], "template": req["template"],
-            "deployment_id": tfvars["deployment_id"], "status": "PLANNING", "request": req, "tfvars": tfvars,
-            "plan": None, "handoff": None, "created_at": stamp, "updated_at": stamp})
+        self.store.insert_environment(
+            {
+                "id": env_id,
+                "org_id": req["org"]["id"],
+                "cloud": req["cloud"],
+                "template": req["template"],
+                "deployment_id": tfvars["deployment_id"],
+                "status": "PLANNING",
+                "request": req,
+                "tfvars": tfvars,
+                "plan": None,
+                "handoff": None,
+                "created_at": stamp,
+                "updated_at": stamp,
+            }
+        )
         job = self._enqueue(env_id, "PLAN" if req["mode"] == "plan" else "PLAN_APPLY")
-        response = {"environmentId": env_id, "jobId": job, "deploymentId": tfvars["deployment_id"], "status": "PLANNING"}
+        response = {
+            "environmentId": env_id,
+            "jobId": job,
+            "deploymentId": tfvars["deployment_id"],
+            "status": "PLANNING",
+        }
         if idempotency_key:
             self.store.remember(idempotency_key, digest, 202, response)
         return 202, response
 
+    @admission
     def apply(self, env_id: str) -> tuple[int, dict]:
         env = self._get(env_id)
         if env["status"] != "PLANNED":
-            raise Conflict("INVALID_STATE", f"only a PLANNED environment can be applied (now {env['status']})")
+            raise Conflict(
+                "INVALID_STATE", f"only a PLANNED environment can be applied (now {env['status']})"
+            )
         self._not_busy(env_id)
         self.store.update_environment(env_id, now(), status="APPLYING")
-        return 202, {"environmentId": env_id, "jobId": self._enqueue(env_id, "APPLY"), "status": "APPLYING"}
+        return 202, {
+            "environmentId": env_id,
+            "jobId": self._enqueue(env_id, "APPLY"),
+            "status": "APPLYING",
+        }
 
+    @admission
     def update(self, env_id: str, body: dict) -> tuple[int, dict]:
         """Change a READY (or FAILED) environment in place: new app settings, sizing or access.
 
         The body takes the same app / sizing / access fields as creation; they are merged into the
-        stored request. Org, cloud, template and target stay. Changing the app replaces the VM."""
+        stored request. Org, cloud, template and target stay. Runtime changes must be explicit."""
         env = self._get(env_id)
         if env["status"] not in ("READY", "INFRA_READY", "APP_NOT_READY", "FAILED"):
-            raise Conflict("INVALID_STATE", f"only a READY or FAILED environment can be updated (now {env['status']})")
+            raise Conflict(
+                "INVALID_STATE",
+                f"only a READY or FAILED environment can be updated (now {env['status']})",
+            )
         self._not_busy(env_id)
-        spec.require(type(body) is dict and not (body.keys() - {"app", "sizing", "access"}), "update takes app, sizing and access only")
+        spec.require(
+            type(body) is dict and not (body.keys() - {"app", "sizing", "access"}),
+            "update takes app, sizing and access only",
+        )
+        for field in ("app", "sizing", "access"):
+            spec.require(type(body.get(field, {})) is dict, f"{field} must be an object")
+        if env["cloud"] == "onprem":
+            raise Conflict(
+                "UNSUPPORTED_UPDATE",
+                "on-prem containers require an explicit replacement deployment",
+            )
         stored = env["request"]
         merged = {
-            "org": stored["org"], "cloud": stored["cloud"], "target": stored["target"],
+            "org": stored["org"],
+            "cloud": stored["cloud"],
+            "target": stored["target"],
             "workflowId": stored.get("workflowId"),
             "app": {"template": stored["template"], **stored["app"], **body.get("app", {})},
             "sizing": {**stored["sizing"], **body.get("sizing", {})},
@@ -115,10 +185,25 @@ class Service:
         if req["cloud"] == "aws":
             tfvars["final_snapshot_identifier"] = env["tfvars"]["final_snapshot_identifier"]
         tfvars["metadata"] = env["tfvars"]["metadata"]  # tags stay as created
-        self.store.update_environment(env_id, now(), request=req, tfvars=tfvars, status="PLANNING", error=None,
-                                      readiness={"infrastructure": {"status": "PENDING"}, "application": {"status": "PENDING"}})
-        return 202, {"environmentId": env_id, "jobId": self._enqueue(env_id, "PLAN_APPLY"), "status": "PLANNING"}
+        self.store.update_environment(
+            env_id,
+            now(),
+            request=req,
+            tfvars=tfvars,
+            status="PLANNING",
+            error=None,
+            readiness={
+                "infrastructure": {"status": "PENDING"},
+                "application": {"status": "PENDING"},
+            },
+        )
+        return 202, {
+            "environmentId": env_id,
+            "jobId": self._enqueue(env_id, "PLAN_APPLY"),
+            "status": "PLANNING",
+        }
 
+    @admission
     def check_app(self, env_id: str) -> tuple[int, dict]:
         env = self._get(env_id)
         if env["status"] not in ("READY", "INFRA_READY", "APP_NOT_READY"):
@@ -127,8 +212,36 @@ class Service:
         readiness = env.get("readiness") or self.view(env)["readiness"]
         readiness["application"] = {**readiness.get("application", {}), "status": "PENDING"}
         self.store.update_environment(env_id, now(), status="VERIFYING_APP", readiness=readiness)
-        return 202, {"environmentId": env_id, "jobId": self._enqueue(env_id, "CHECK_APP"), "status": "VERIFYING_APP"}
+        return 202, {
+            "environmentId": env_id,
+            "jobId": self._enqueue(env_id, "CHECK_APP"),
+            "status": "VERIFYING_APP",
+        }
 
+    @admission
+    def reconcile(self, env_id: str) -> tuple[int, dict]:
+        env = self._get(env_id)
+        if env["cloud"] != "onprem" or env["status"] not in (
+            "NEEDS_RECONCILIATION",
+            "FAILED",
+            "APP_NOT_READY",
+            "INFRA_READY",
+            "READY",
+        ):
+            raise Conflict(
+                "INVALID_STATE",
+                "on-prem reconciliation needs a completed or interrupted deployment",
+            )
+        self._not_busy(env_id)
+        self.store.update_environment(env_id, now(), status="RECONCILING")
+        return 202, {
+            "environmentId": env_id,
+            "jobId": self._enqueue(env_id, "RECONCILE"),
+            "status": "RECONCILING",
+        }
+
+
+    @admission
     def bind_workflow(self, env_id: str, body: dict) -> tuple[int, dict]:
         """Attach an already-deployed release environment without another Terraform apply."""
         env = self._get(env_id)
@@ -139,15 +252,23 @@ class Service:
         self.store.update_environment(env_id, now(), request={**env["request"], "workflowId": body["workflowId"]})
         return 200, self.get(env_id)
 
+    @admission
     def destroy(self, env_id: str) -> tuple[int, dict]:
         env = self._get(env_id)
         if env["status"] in ("DESTROYED", "DESTROYING"):
             return 200, self.view(env)
         if env["status"] == "NEEDS_RECONCILIATION":
-            raise Conflict("NEEDS_RECONCILIATION", "a job was cut off; check the cloud and the state before destroying")
+            raise Conflict(
+                "NEEDS_RECONCILIATION",
+                "a job was cut off; check the cloud and the state before destroying",
+            )
         self._not_busy(env_id)
         self.store.update_environment(env_id, now(), status="DESTROYING")
-        return 202, {"environmentId": env_id, "jobId": self._enqueue(env_id, "DESTROY"), "status": "DESTROYING"}
+        return 202, {
+            "environmentId": env_id,
+            "jobId": self._enqueue(env_id, "DESTROY"),
+            "status": "DESTROYING",
+        }
 
     def view(self, env: dict) -> dict:
         handoff = env["handoff"] or {}
@@ -237,39 +358,106 @@ class Service:
         try:
             if job["kind"] in ("PLAN", "PLAN_APPLY"):
                 plan = self.driver.plan(env, env["tfvars"], {"intent": "prepare"})
-                self.store.update_environment(env_id, now(), plan=plan, status="PLANNED" if job["kind"] == "PLAN" else "APPLYING")
-            if job["kind"] in ("APPLY", "PLAN_APPLY"):
-                handoff = self.driver.apply(env, {"plan": "reviewed.tfplan"}, {})
-                self.store.update_environment(env_id, now(), handoff=handoff, status="INFRA_READY", error=None,
-                                              readiness={"infrastructure": {"status": "READY", "observedAt": now(), "jobId": job["id"]},
-                                                         "application": {"status": "PENDING", "observedAt": None}})
-            if job["kind"] in ("APPLY", "PLAN_APPLY", "CHECK_APP"):
-                # A separate job keeps successful apply evidence even if this process stops while probing.
+                self.store.update_environment(
+                    env_id,
+                    now(),
+                    plan=plan,
+                    status="PLANNED" if job["kind"] == "PLAN" else "APPLYING",
+                )
+            if job["kind"] in ("APPLY", "PLAN_APPLY", "RECONCILE"):
+                handoff = (
+                    self.tf.reconcile(env_id, cloud, env["tfvars"])
+                    if job["kind"] == "RECONCILE"
+                    else self.driver.apply(env, {"plan": "reviewed.tfplan"}, {})
+                )
+                if job["kind"] == "RECONCILE" and handoff is None:
+                    self.store.update_environment(
+                        env_id, now(), status="DESTROYED", handoff=None, error=None, readiness=None
+                    )
+                    self.store.update_job(job["id"], status="SUCCEEDED", finished_at=now())
+                    self._publish(env_id, job["id"])
+                    return
+                self.store.update_environment(
+                    env_id,
+                    now(),
+                    handoff=handoff,
+                    status="INFRA_READY",
+                    error=None,
+                    readiness={
+                        "infrastructure": {
+                            "status": "READY",
+                            "observedAt": now(),
+                            "jobId": job["id"],
+                        },
+                        "application": {"status": "PENDING", "observedAt": None},
+                    },
+                )
+            if job["kind"] in ("APPLY", "PLAN_APPLY", "RECONCILE", "CHECK_APP"):
+                # A separate job keeps apply evidence if this process stops while probing.
                 if job["kind"] != "CHECK_APP":
                     self._enqueue(env_id, "CHECK_APP")
                 else:
                     self.store.update_environment(env_id, now(), status="VERIFYING_APP")
                     current = self._get(env_id)
                     readiness = current.get("readiness") or self.view(current)["readiness"]
-                    application = self.checker.check(current["handoff"], current["tfvars"].get("app"))
+                    application = self.checker.check(
+                        current["handoff"], current["tfvars"].get("app")
+                    )
                     previous = readiness.get("application", {})
                     if application.get("status") != "READY":
                         application["lastSuccessAt"] = previous.get("lastSuccessAt")
                     readiness["application"] = application
-                    status = "READY" if application["status"] == "READY" else (
-                        "INFRA_READY" if application["status"] in ("UNKNOWN", "NOT_CONFIGURED") else "APP_NOT_READY")
+                    status = (
+                        "READY"
+                        if application["status"] == "READY"
+                        else (
+                            "INFRA_READY"
+                            if application["status"] in ("UNKNOWN", "NOT_CONFIGURED")
+                            else "APP_NOT_READY"
+                        )
+                    )
                     self.store.update_environment(env_id, now(), status=status, readiness=readiness)
                     if status != "READY":
-                        self.store.update_job(job["id"], status="FAILED", error=application.get("reason"), finished_at=now())
+                        self.store.update_job(
+                            job["id"],
+                            status="FAILED",
+                            error=application.get("reason"),
+                            finished_at=now(),
+                        )
                         self._publish(env_id, job["id"])
                         return
             if job["kind"] == "DESTROY":
                 plan = self.driver.plan(env, env["tfvars"], {"intent": "cleanup"})
                 self.driver.cleanup(env, plan, {})
-                self.store.update_environment(env_id, now(), status="DESTROYED", handoff=None, error=None, readiness=None)
+                self.store.update_environment(
+                    env_id, now(), status="DESTROYED", handoff=None, error=None, readiness=None
+                )
         except (TerraformError, OSError, ValueError) as exc:
+            from .node import NodeEffectUnconfirmed
+
+            if isinstance(exc, NodeEffectUnconfirmed):
+                self.store.update_job(
+                    job["id"], status="NEEDS_RECONCILIATION", error=str(exc), finished_at=now()
+                )
+                self.store.update_environment(
+                    env_id, now(), status="NEEDS_RECONCILIATION", error=str(exc)
+                )
+                return
             message = str(exc)[-2000:]
             self.store.update_job(job["id"], status="FAILED", error=message, finished_at=now())
+            if cloud == "onprem" and job["kind"] == "CHECK_APP":
+                current = self._get(env_id)
+                readiness = current.get("readiness") or self.view(current)["readiness"]
+                readiness["application"] = {
+                    "status": "UNKNOWN",
+                    "reason": message,
+                    "observedAt": now(),
+                }
+                self.store.update_environment(
+                    env_id, now(), status="INFRA_READY", readiness=readiness
+                )
+                self._publish(env_id, job["id"])
+                return
             self.store.update_environment(env_id, now(), status="FAILED", error=message)
             self._publish(env_id, job["id"])
             return

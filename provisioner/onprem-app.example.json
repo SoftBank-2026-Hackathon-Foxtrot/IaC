@@ -1,0 +1,30 @@
+{
+  "nodes": {
+    "home-pc": {
+      "orgs": [
+        "chiikawa"
+      ],
+      "dockerHost": "ssh://deploy@100.64.1.2:22",
+      "sshKeyFile": "/run/foxtrot/onprem-ssh-key",
+      "sshHostKey": "ssh-ed25519 REPLACE_WITH_VERIFIED_HOST_KEY",
+      "runtimeRoot": "/home/deploy/foxtrot/apps",
+      "network": "registered-data_default",
+      "bindAddress": "100.64.1.2",
+      "expectedServedBy": "onprem",
+      "imagePrefixes": [
+        "ghcr.io/softbank-2026-hackathon-foxtrot/"
+      ],
+      "environment": {
+        "REDIS_URL": "redis://redis-proxy.internal:6379",
+        "OBJECT_MIGRATION_SERVER": "http://object-migration.internal:8080"
+      },
+      "apiEnvironment": {
+        "WORKLOAD_ACTOR": "chiikawa-onprem-api"
+      },
+      "workerEnvironment": {
+        "WORKLOAD_ACTOR": "chiikawa-onprem-worker"
+      },
+      "readinessDeadlineSeconds": 180
+    }
+  }
+}

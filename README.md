@@ -91,8 +91,8 @@ docs/                   # 설계·플랫폼 계약·운영 절차
 Terraform `>= 1.10, < 2`, Python `>= 3.10` 필요. 검증에 사용한 Terraform은 `1.13.5`이며 provider 버전은 각 root의 lock 파일에 고정합니다.
 
 ```bash
-python -m pip install -r requirements-contracts.txt -r requirements-onprem.txt -r requirements-observability.txt
-python -m unittest discover -s tests -v
+python -m pip install -r requirements-contracts.txt -r requirements-onprem.txt -r requirements-observability.txt -r requirements-tests.txt
+python -m pytest tests -v
 terraform fmt -check -recursive
 terraform -chdir=environments/aws init -backend=false
 terraform -chdir=environments/aws validate
@@ -141,14 +141,14 @@ python tools/render_inputs.py render --cloud aws \
 
 실제 PLAN/APPLY와 COMPUTE 준비 결과를 컨트롤 플레인으로 보고하는 방법은 [관측 연결](docs/migration-observability.md)을 참고하세요.
 
-온프렘 실행 설정: [개인 PC 한 대 준비](docs/on-prem-setup.md) · [v2 API](contracts/onprem.openapi.yaml). 기존 AWS/GCP v1 API와 별도로 Ansible 경로를 제공한다.
+온프렘 실행 설정: [개인 PC 한 대 준비](docs/on-prem-setup.md) · [v2 API](contracts/onprem.openapi.yaml). v2 API는 데이터 서비스를 준비하고, v1 API의 `cloud: onprem`은 등록된 노드에 사용자 앱을 실행한다. [앱 배포 설정](docs/environment-provisioning.md#온프렘-앱-배포)을 참고한다.
 
 ### Application system telemetry
 
 `appTelemetry` sets the OTLP HTTP `endpoint`, server-managed `applicationId` (from the loaded migration seed; no hardcoded demo name), and `headersSecrets` (`aws` Secrets Manager ARN / `gcp` Secret Manager resource). Platform Terraform copies the exporter header secret into GCP and injects both references. App requests cannot override OTEL settings.
 
-The provisioner injects `OTEL_OWNER_ID` from the persisted organization and `OTEL_DEPLOYMENT_ID` from the deployment record. The updated demo image collects its container cgroup CPU, memory and disk I/O. Docker VM and on-prem app containers use an isolated network; no host agent or host filesystem mount is installed. On-prem exporter credentials come from the control-plane OTLP environment or `appTelemetry.endpoint` / `headersEnv`; nodes must reach the collector privately.
+The provisioner injects `OTEL_OWNER_ID` from the persisted organization and `OTEL_DEPLOYMENT_ID` from the deployment record. The updated demo image collects its container cgroup CPU, memory and disk I/O. Docker VM and on-prem app containers use an isolated network; no host agent or host filesystem mount is installed. On-prem exporter credentials come from the provisioner OTLP environment or `appTelemetry.endpoint` / `headersEnv`; nodes must reach the collector privately.
 
-Managed Fargate / Cloud Run app containers share a network namespace within one app instance. Their config sets `OTEL_NETWORK_SCOPE=app-instance`; only the API container reports network counters, which include its app workers and tunnel. CPU/memory/I/O remain container-scoped; missing kernel counters or resource limits remain missing. Shared filesystem capacity is not reported. Existing deployments need the updated image and configuration; changing this repository does not redeploy them.
+This repository keeps EC2/GCE app deployments. The separate control-plane managed runtime uses Fargate / Cloud Run; those app containers share a network namespace within one app instance. Their config sets `OTEL_NETWORK_SCOPE=app-instance`; only the API container reports network counters, which include its app workers and tunnel. CPU/memory/I/O remain container-scoped; missing kernel counters or resource limits remain missing. Shared filesystem capacity is not reported. Existing deployments need the updated image and configuration; changing this repository does not redeploy them.
 
 Existing shared deployments: [system metric registration and rollout](docs/shared-system-metrics.md).

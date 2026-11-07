@@ -29,6 +29,7 @@ APP_FIELDS = {  # request (camelCase) -> Terraform app object
     "tunnelSecret": "tunnel_secret", "port": "port", "dbPasswordSecret": "db_password_secret", "healthPath": "health_path",
 }
 ACCESS_FIELDS = {
+    "onprem": {},
     "aws": {"replicationCidrs": "replication_cidrs", "proxyCidrs": "proxy_cidrs", "migrationSourceCidrs": "migration_source_cidrs",
             "cloudflareTunnel": "enable_cloudflare_tunnel", "webIngressCidrs": "web_ingress_cidrs"},
     "gcp": {"dbAuthorizedNetworks": "db_authorized_networks", "proxyCidrs": "proxy_cidrs",
@@ -59,12 +60,12 @@ def parse(request: dict, catalog: dict, config: dict) -> dict:
             "org.id: 3-32 lowercase letters, digits or hyphens, starting with a letter")
     require(not (org.keys() - {"id", "name"}), "org: only id and name")
     cloud = request.get("cloud")
-    require(cloud in config["clouds"], f"cloud: one of {sorted(config['clouds'])}")
+    require(type(cloud) is str and cloud in ACCESS_FIELDS and cloud in config["clouds"], f"cloud: one of {sorted(config['clouds'])}")
     app = request.get("app") or {}
     require(type(app) is dict, "app must be an object")
     template = app.get("template", "chiikawa-groupbuy")
-    require(template in catalog["templates"], f"app.template: one of {sorted(catalog['templates'])}")
-    require(not (app.keys() - set(APP_FIELDS) - {"template"}), "app: unknown field")
+    require(type(template) is str and template in catalog["templates"], f"app.template: one of {sorted(catalog['templates'])}")
+    require(not (app.keys() - set(APP_FIELDS) - {"template"} - ({"cpu", "memoryMiB"} if cloud == "onprem" else set())), "app: unknown field")
     mode = request.get("mode", "apply")
     require(mode in ("apply", "plan"), "mode: apply or plan")
     for field in ("target", "sizing", "access"):
@@ -77,6 +78,113 @@ def parse(request: dict, catalog: dict, config: dict) -> dict:
 
 def render(req: dict, catalog: dict, config: dict, suffix: str, today: dt.date) -> dict:
     """Terraform inputs for this request. Raises RequestError on anything not allowed."""
+    if req["cloud"] == "onprem":
+        from .node_config import registered
+
+        node_id = req["target"].get("nodeId")
+        require(
+            not (set(req["target"]) - {"nodeId", "preparationId"})
+            and type(node_id) is str
+            and node_id in config["clouds"]["onprem"]["nodes"],
+            "target.nodeId must name a registered on-prem node",
+        )
+        node = registered(config["clouds"]["onprem"]["nodes"], node_id, req["org"]["id"])
+        prep_id = req["target"].get("preparationId")
+        require(
+            prep_id is None
+            or (type(prep_id) is str and re.fullmatch(r"env-[a-f0-9]{12}", prep_id)),
+            "invalid target.preparationId",
+        )
+        require(
+            not node.get("preparation") or prep_id is not None,
+            "prepare this node before deploying the app",
+        )
+        template = catalog["templates"][req["template"]]
+        app = copy.deepcopy(template.get("app", {}))
+        require("image" in req["app"], "on-prem deployment requires app.image")
+        for key, value in req["app"].items():
+            app[{**APP_FIELDS, "cpu": "cpu", "memoryMiB": "memory_mib"}[key]] = value
+        require(
+            type(app.get("port", 80)) is int and 1 <= app.get("port", 80) <= 65535,
+            "invalid app.port",
+        )
+        for field in ("worker_count", "api_workers"):
+            count = app.get(field, 2 if field == "worker_count" else 4)
+            require(
+                type(count) is int and (0 if field == "worker_count" else 1) <= count <= 8,
+                f"invalid {field}",
+            )
+        app.setdefault("port", 80)
+        app.setdefault("cpu", 1)
+        app.setdefault("memory_mib", 512)
+        require(type(app["cpu"]) in (int, float) and 0.1 <= app["cpu"] <= 8, "invalid app.cpu")
+        require(
+            type(app["memory_mib"]) is int and 128 <= app["memory_mib"] <= 32768,
+            "invalid app.memoryMiB",
+        )
+        require(
+            type(app.get("health_path", "/readyz")) is str
+            and re.fullmatch(r"/[A-Za-z0-9/_-]*", app.get("health_path", "/readyz")),
+            "healthPath must be a local HTTP path",
+        )
+        require(not app.get("db_password_secret"), "on-prem DB credentials belong to the registered node")
+        require(not app.get("secret_env"), "on-prem secrets belong to the registered node")
+        require(
+            not app.get("tunnel_secret"),
+            "on-prem ingress belongs to the registered node",
+        )
+        for field in ("env", "api_env", "worker_env"):
+            values = app.get(field, {})
+            require(type(values) is dict, f"{field} must be an object")
+            require(
+                all(
+                    type(key) is str
+                    and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key)
+                    and type(value) is str
+                    and "\n" not in value
+                    and "\r" not in value
+                    for key, value in values.items()
+                ),
+                f"{field} must contain valid single-line environment variables",
+            )
+        require(
+            type(app["image"]) is str
+            and re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:/@-]{0,511}", app["image"])
+            and any(app["image"].startswith(prefix) for prefix in node["imagePrefixes"]),
+            "image is not allowed on this node",
+        )
+        require(
+            not req["sizing"] and not req["access"],
+            "on-prem capacity and access are configured on the registered node",
+        )
+        from .node_runtime import onprem_entrypoint
+
+        registered_keys = set().union(
+            *(
+                node.get(field, {})
+                for field in (
+                    "environment",
+                    "secretEnv",
+                    "secretFiles",
+                    "apiEnvironment",
+                    "workerEnvironment",
+                )
+            )
+        )
+        app["env"] = {
+            **{k: v for k, v in config.get("appEnv", {}).items() if k not in registered_keys},
+            **app.get("env", {}),
+        }
+        app["entrypoint"] = onprem_entrypoint(app.get("port", 80), app.get("api_workers", 4))
+        return {
+            "deployment_id": deployment_id(req["org"]["id"], "node", suffix),
+            "node_id": node_id,
+            "org_id": req["org"]["id"],
+            "preparation_id": prep_id,
+            "app": app,
+            "sizing": {},
+        }
+
     cloud, cloud_conf = req["cloud"], config["clouds"][req["cloud"]]
     template = catalog["templates"][req["template"]]
     dep = deployment_id(req["org"]["id"], cloud, suffix)

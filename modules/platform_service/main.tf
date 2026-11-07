@@ -67,7 +67,9 @@ data "aws_iam_policy_document" "ecs_assume" {
 }
 
 locals {
-  secret_arns = distinct(flatten([for c in var.containers : values(c.secrets)]))
+  secret_arns = distinct([for arn in flatten([for c in var.containers : values(c.secrets)]) :
+    join(":", slice(split(":", arn), 0, min(7, length(split(":", arn)))))
+  ])
   has_secrets = length(flatten([for c in var.containers : keys(c.secrets)])) > 0 # known at plan time
 }
 
@@ -95,8 +97,14 @@ resource "aws_iam_role" "task" {
   name               = "foxtrot-${var.name}-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
 }
+variable "task_policy_enabled" {
+  description = "Known plan-time switch when the policy JSON contains resource outputs."
+  type        = bool
+  default     = null
+}
+
 resource "aws_iam_role_policy" "task" {
-  count  = var.task_policy == null ? 0 : 1
+  count  = var.task_policy_enabled == null ? (var.task_policy == null ? 0 : 1) : (var.task_policy_enabled ? 1 : 0)
   name   = "service"
   role   = aws_iam_role.task.id
   policy = var.task_policy

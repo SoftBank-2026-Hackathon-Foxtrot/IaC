@@ -22,7 +22,8 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class AppChecker:
-    def __init__(self, config=None):
+    def __init__(self, config=None, node_checker=None):
+        self.node_checker = node_checker
         config = config or {}
         self.deadline = max(0, min(float(config.get("deadlineSeconds", 180)), 900))
         self.interval = max(0.01, min(float(config.get("intervalSeconds", 5)), 30))
@@ -44,6 +45,8 @@ class AppChecker:
     def check(self, handoff, app, *, expected_identity=None, allow_loopback=False):
         if not app:
             return {"status": "NOT_CONFIGURED", "observedAt": now(), "reason": "No app image configured"}
+        if (handoff.get("compute") or {}).get("runtime") == "ON_PREM" and self.node_checker:
+            return self.node_checker(handoff)
         try:
             host = ipaddress.ip_address(handoff["compute"]["private_ip"])
             if (host.is_loopback and not allow_loopback) or host.is_link_local or host.is_unspecified or host.version != 4:
