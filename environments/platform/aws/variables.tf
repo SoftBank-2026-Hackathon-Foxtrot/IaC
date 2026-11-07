@@ -67,5 +67,11 @@ variable "traffic" {
     lb_id      = optional(string, "")
     pool_ids   = optional(string, "")
   })
-  default = {}
+  # app.foxtrot.live load balancer and its two pools (IDs are not secret).
+  default = {
+    zone_id    = "a347c7267257bd2d1b3fe35d0d62ac72"
+    account_id = "3d6694c353d2e0519e3215805b763743"
+    lb_id      = "6bf4a03e3d63cb3da4a19e6d0c69a606"
+    pool_ids   = "{\"aws\":\"b26f0a79ed2d63568022f5b0ffd2b00d\",\"gcp\":\"c02ba1a4acbbbb702fd2f67d6b6dc6a4\"}"
+  }
 }
