@@ -109,13 +109,16 @@ rm -f "$CONF/bootstrap.env"
 unset DB_ADMIN_PASSWORD ADMIN_JSON
 echo "database: $DB_STATE"
 
+docker network inspect foxtrot-app >/dev/null 2>&1 || docker network create foxtrot-app
+
 run() {  # name, env file, command...
   local name="$1" envfile="$2"; shift 2
   docker rm -f "$name" >/dev/null 2>&1 || true
-  # WORKLOAD_INSTANCE: containers on the host network each run as PID 1, so the app puts the
-  # container name in the process ID it reports to the control plane.
-  docker run -d --name "$name" --restart unless-stopped --network host --stop-timeout 35 \
-    --env-file "$CONF/common.env" --env-file "$envfile" -e WORKLOAD_INSTANCE="$name" "$IMAGE" "$@"
+  local ports=() role=worker
+  if [ "$name" = app-api ]; then ports=(-p "${port}:${port}"); role=api; fi
+  # Each app container has its own network namespace and metric identity.
+  docker run -d --name "$name" --restart unless-stopped --network foxtrot-app --stop-timeout 35 "$${ports[@]}" \
+    --env-file "$CONF/common.env" --env-file "$envfile" -e WORKLOAD_INSTANCE="$name" -e OTEL_APP_ROLE="$role" "$IMAGE" "$@"
 }
 run app-api "$CONF/api.env" uvicorn app.main:app --host 0.0.0.0 --port ${port} --workers ${api_workers} \
   --timeout-keep-alive 120 --ws-max-size 4096
