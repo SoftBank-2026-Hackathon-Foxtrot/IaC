@@ -26,8 +26,12 @@ while True:
 
 role, password = env["APP_DB_USER"], env["APP_DB_PASSWORD"]
 exists = admin.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone()
-verb = "ALTER" if exists else "CREATE"
-admin.execute(sql.SQL(verb + " ROLE {} LOGIN PASSWORD {}").format(sql.Identifier(role), sql.Literal(password)))
+# A new role may log in. An existing one keeps its LOGIN flag: during a DB migration the platform
+# fences one side (NOLOGIN) and flips it at cutover, and a reboot must not undo that.
+if exists:
+    admin.execute(sql.SQL("ALTER ROLE {} PASSWORD {}").format(sql.Identifier(role), sql.Literal(password)))
+else:
+    admin.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(sql.Identifier(role), sql.Literal(password)))
 admin.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(sql.Identifier(env["DB_NAME"]), sql.Identifier(role)))
 admin.execute(sql.SQL("GRANT USAGE, CREATE ON SCHEMA public TO {}").format(sql.Identifier(role)))
 # The app role owns its tables, and only a table's owner may add it to a publication or apply
