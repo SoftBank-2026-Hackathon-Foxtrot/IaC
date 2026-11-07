@@ -125,6 +125,8 @@ def render(req: dict, catalog: dict, config: dict, suffix: str, today: dt.date) 
     for key, field in ACCESS_FIELDS[cloud].items():
         if key in req["access"]:
             tfvars[field] = req["access"][key]
+    if app.get("tunnel_secret"):  # cloudflared needs outbound 7844 to the Cloudflare edge
+        tfvars["enable_cloudflare_tunnel"] = True
     try:
         if req["sizing"]:
             return inputs.merge_overrides(cloud, tfvars, req["sizing"])

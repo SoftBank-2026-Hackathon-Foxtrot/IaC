@@ -150,6 +150,7 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(after["tfvars"]["app"]["tunnel_secret"], "arn:aws:secretsmanager:x")
         self.assertEqual(after["tfvars"]["app"]["env"], {"A": "1"})
         self.assertEqual(after["tfvars"]["app"]["port"], 8000)
+        self.assertTrue(after["tfvars"]["enable_cloudflare_tunnel"])
         with self.assertRaises(spec.RequestError):
             self.service.update(env_id, {"cloud": "gcp"})
 
