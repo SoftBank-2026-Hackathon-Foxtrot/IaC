@@ -4,7 +4,7 @@
 # Keep in step with the deployment:
 #   environments.*.appUrl   app VM private IP and port, reached over the tailnet. A VM replaced by
 #                           the provisioner gets a new private IP: update it here.
-#   environments.*.actors   the apps' WORKLOAD_ACTOR names and process counts (uvicorn --workers 4,
+#   environments.*.actors   the apps' WORKLOAD_ACTOR names and process counts (uvicorn --workers 2,
 #                           two worker containers). Also the DB adapter's published workload scope.
 #   resources.redis refs    keys of STATEMIG_ENDPOINTS (redis-endpoints-admin secret)
 #   resources.object refs   keys of OBJECT_RESOURCES (variables.tf object_resources)
@@ -13,16 +13,16 @@ scope: scope:chiikawa
 
 environments:
   aws:
-    appUrl: http://10.10.0.79:8000
+    appUrl: http://10.10.0.132:8000
     trafficPool: aws  # an environment name in the traffic service's CF_POOL_IDS
-    actors: {chiikawa-aws-api: 4, chiikawa-aws-worker: 2}
+    actors: {chiikawa-aws-api: 2, chiikawa-aws-worker: 2}
     # This environment's resources. A workflow takes its source refs from its source environment
     # and its target refs from its target environment (control-plane#13): no edit per direction.
     resources: {database: "db:chiikawa-aws-3e3d", redis: "resource:aws", object: "resource:aws-receipts"}
   gcp:
     appUrl: http://10.20.0.2:8000
     trafficPool: gcp  # its origin points at tunnel foxtrot-chiikawa-gcp during our tests (tools/gcp_pool_origin.sh)
-    actors: {chiikawa-gcp-api: 4, chiikawa-gcp-worker: 2}
+    actors: {chiikawa-gcp-api: 2, chiikawa-gcp-worker: 2}
     resources: {database: "db:chiikawa-gcp-1975", redis: "resource:gcp", object: "resource:gcp-receipts"}
 
 resources:
@@ -59,7 +59,7 @@ resources:
   object:
     bindingRef: binding:receipts
     # Every API and worker process of both environments follows the route on its own.
-    expectedApps: 12
+    expectedApps: 8
     policy: {rollbackMode: REVERSE_REQUIRED, maxQuiesceSeconds: 30}
 
 adapters:
