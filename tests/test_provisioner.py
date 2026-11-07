@@ -99,6 +99,30 @@ class SpecTest(unittest.TestCase):
         self.assertEqual(tf["app"]["env"]["REDIS_URL"], "redis://mine:6379")
         self.assertEqual(tf["app"]["env"]["OBJECT_MIGRATION_SERVER"], "http://object-migration.internal:8080")
 
+    def test_apps_report_to_the_control_plane_when_configured(self):
+        config = json.loads(json.dumps(CONFIG))
+        config["workload"] = {"controlPlaneUrl": "http://control-plane.internal:8000",
+                              "tokenSecrets": {"aws": "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:wl",
+                                               "gcp": "projects/p/secrets/foxtrot-platform-workload-token"}}
+        aws = spec.render(spec.parse(body(), CATALOG, config), CATALOG, config, "a1b2", TODAY)["app"]
+        self.assertEqual(aws["env"]["CONTROL_PLANE_URL"], "http://control-plane.internal:8000")
+        self.assertEqual(aws["env"]["WORKLOAD_SCOPE"], "scope:chiikawa")
+        self.assertEqual(aws["env"]["OBJECT_MIGRATION_ID_FILE"], "/tmp/object-migration-id")
+        self.assertEqual(aws["api_env"]["WORKLOAD_ACTOR"], "chiikawa-aws-api")
+        self.assertEqual(aws["worker_env"]["WORKLOAD_ACTOR"], "chiikawa-aws-worker")
+        self.assertEqual(aws["secret_env"]["WORKLOAD_TOKEN"], "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:wl")
+        gcp = spec.render(spec.parse(body(cloud="gcp"), CATALOG, config), CATALOG, config, "a1b2", TODAY)["app"]
+        self.assertEqual(gcp["api_env"]["WORKLOAD_ACTOR"], "chiikawa-gcp-api")
+        self.assertEqual(gcp["secret_env"]["WORKLOAD_TOKEN"], "projects/p/secrets/foxtrot-platform-workload-token")
+        # The request still wins, and without the config nothing is added.
+        mine = spec.render(spec.parse(body(app={"apiEnv": {"WORKLOAD_ACTOR": "other-api"}}), CATALOG, config),
+                           CATALOG, config, "a1b2", TODAY)["app"]
+        self.assertEqual(mine["api_env"]["WORKLOAD_ACTOR"], "other-api")
+        self.assertNotIn("CONTROL_PLANE_URL", self.render(body())["app"].get("env", {}))
+        del config["workload"]["tokenSecrets"]["gcp"]
+        with self.assertRaises(spec.RequestError):
+            spec.render(spec.parse(body(cloud="gcp"), CATALOG, config), CATALOG, config, "a1b2", TODAY)
+
     def test_tailscale_comes_from_the_server_config(self):
         config = json.loads(json.dumps(CONFIG))
         config["clouds"]["gcp"]["tailscale"] = {"authKeySecret": "projects/p/secrets/foxtrot-tailscale-authkey-gcp"}

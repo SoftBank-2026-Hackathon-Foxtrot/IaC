@@ -99,6 +99,25 @@ Idempotency-Key: <키>
 - 작업은 한 번에 하나씩 실행합니다. 실행 중 프로세스가 멈추면 그 환경은 `NEEDS_RECONCILIATION`이 되고 자동으로 다시 실행하지 않습니다.
 - API로 만든 환경은 `deletion_protection=false`, `force_destroy_storage=true`가 기본입니다(서버 설정). PoC 정리를 위해서이며 운영 환경에는 쓰지 않습니다.
 
+### 컨트롤 플레인 보고 (서버 설정 `workload`)
+
+서버 설정에 `workload`가 있으면 앱의 모든 프로세스가 컨트롤 플레인에 주기적으로 보고하고, RUN/HOLD 지시와 객체 이전 경로를 따르도록 env를 넣습니다. 앱 쪽 동작은 데모 앱 `app/workload.py`를 따릅니다. 요청에 같은 이름의 값이 있으면 요청 값이 우선합니다.
+
+```json
+{"workload": {"controlPlaneUrl": "http://control-plane.internal:8000",
+              "tokenSecrets": {"aws": "<Secrets Manager ARN>", "gcp": "projects/<p>/secrets/<name>"}}}
+```
+
+| env | 값 | 넣는 곳 |
+|---|---|---|
+| `CONTROL_PLANE_URL` | `controlPlaneUrl` | 모든 프로세스 |
+| `WORKLOAD_SCOPE` | `scope:<org>` | 모든 프로세스 |
+| `OBJECT_MIGRATION_ID_FILE` | `/tmp/object-migration-id` (보고 스레드가 받은 객체 이전 ID를 쓰고 objroute가 읽음) | 모든 프로세스 |
+| `WORKLOAD_ACTOR` | API `<org>-<cloud>-api`, 워커 `<org>-<cloud>-worker` | 프로세스별 |
+| `WORKLOAD_TOKEN` | 클라우드별 시크릿 (`tokenSecrets.<cloud>`) | 부팅 때 비밀 저장소에서 읽음 |
+
+컨트롤 플레인 시드의 `scope`와 `environments.*.actors`는 이 이름과 같아야 합니다(예: org `chiikawa` → `chiikawa-aws-api`). 플랫폼 root는 AWS 토큰(`foxtrot/platform/workload-token`)과 같은 값을 GCP Secret Manager `foxtrot-platform-workload-token`에도 두고 이 설정을 연결합니다.
+
 ## 검증
 
 - `terraform validate`, `terraform test`(mock provider): AWS 14개, GCP 10개. 부팅 스크립트의 레지스트리 로그인, 비밀값 부재, PG17·논리 복제, Redis 기본값을 검사합니다.

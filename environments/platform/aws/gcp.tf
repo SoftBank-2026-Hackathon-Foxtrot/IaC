@@ -34,3 +34,16 @@ resource "aws_secretsmanager_secret_version" "gcp" {
   secret_id     = aws_secretsmanager_secret.gcp[each.key].id
   secret_string = base64decode(google_service_account_key.platform[each.key].private_key)
 }
+
+# The workload token for app VMs on GCP: they read secrets from Secret Manager in their project,
+# so the token the control plane checks has a copy there. The provisioner points apps at it.
+resource "google_secret_manager_secret" "workload_token" {
+  secret_id = "foxtrot-platform-workload-token"
+  replication {
+    auto {}
+  }
+}
+resource "google_secret_manager_secret_version" "workload_token" {
+  secret      = google_secret_manager_secret.workload_token.id
+  secret_data = random_password.generated["workload-token"].result
+}
