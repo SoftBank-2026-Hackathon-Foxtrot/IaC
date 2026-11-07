@@ -26,6 +26,7 @@ module "security_groups" {
   enable_cloudflare_tunnel = var.enable_cloudflare_tunnel
   migration_source_cidrs   = var.migration_source_cidrs
   replication_cidrs        = var.replication_cidrs
+  enable_tailscale         = var.tailscale != null
 }
 module "s3" {
   source        = "../../modules/aws/s3"
@@ -38,7 +39,7 @@ module "iam" {
   name        = var.deployment_id
   tags        = merge(module.metadata.common, { component = "identity" })
   bucket_arn  = module.s3.bucket_arn
-  secret_arns = concat([aws_secretsmanager_secret.app_db.arn, module.rds.master_secret_arn], values(local.extra_secret_arns))
+  secret_arns = concat([aws_secretsmanager_secret.app_db.arn, module.rds.master_secret_arn], values(local.extra_secret_arns), var.tailscale == null ? [] : [var.tailscale.auth_key_secret])
 }
 module "ec2" {
   source                = "../../modules/aws/ec2"
@@ -52,6 +53,7 @@ module "ec2" {
   instance_profile_name = module.iam.instance_profile_name
   key_name              = var.key_name
   user_data             = module.app_runtime.script
+  source_dest_check     = var.tailscale == null
   depends_on            = [module.vpc]
 }
 module "rds" {

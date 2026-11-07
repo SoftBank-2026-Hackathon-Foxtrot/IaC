@@ -86,7 +86,7 @@ def validate_config(cloud, config):
     extras = {"aws": {"account_id", "ami_id", "key_name", "postgres_version", "final_snapshot_identifier"},
               "gcp": {"project_id", "zone", "image"}}
     require(cloud in extras, "Unsupported cloud")
-    optional = {"proxy_cidrs", "enable_cloudflare_tunnel", "force_destroy_storage"} | (
+    optional = {"proxy_cidrs", "enable_cloudflare_tunnel", "force_destroy_storage", "tailscale"} | (
         {"migration_source_cidrs", "replication_cidrs", "redis_transit_encryption"} if cloud == "aws"
         else {"db_authorized_networks", "redis_auth", "redis_transit_encryption"})
     require(not (config.keys() - common - extras[cloud] - optional), "Unknown baseline key; keep secrets outside JSON")

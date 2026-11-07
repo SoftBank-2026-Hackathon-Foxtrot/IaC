@@ -8,6 +8,7 @@ resource "google_compute_instance" "this" {
   zone                      = var.zone
   machine_type              = var.machine_type
   allow_stopping_for_update = true
+  can_ip_forward            = var.can_ip_forward
   boot_disk {
     initialize_params {
       image  = var.image

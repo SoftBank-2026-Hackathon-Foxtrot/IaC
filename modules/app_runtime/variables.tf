@@ -69,3 +69,14 @@ variable "storage" {
     secret        = optional(string) # 비밀 저장소에 있는 access key secret 참조
   })
 }
+
+variable "tailscale" {
+  description = "앱 VM을 tailnet에 가입시키고 자기 VPC 대역을 광고합니다 (플랫폼과의 사설망). null이면 가입하지 않음"
+  type = object({
+    auth_key_secret = string       # 비밀 저장소에 있는 인증 키 참조
+    tag             = string       # tag:aws / tag:gcp
+    routes          = list(string) # 광고할 VPC 대역
+    hostname        = string
+  })
+  default = null
+}

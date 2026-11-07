@@ -6,6 +6,7 @@ terraform {
     tls        = { source = "hashicorp/tls", version = "~> 4.0" }
     google     = { source = "hashicorp/google", version = "~> 7.0" }
     cloudflare = { source = "cloudflare/cloudflare", version = "~> 5.0" }
+    tailscale  = { source = "tailscale/tailscale", version = "~> 0.21" }
   }
   # bucket comes from -backend-config (it carries the account ID):
   #   terraform init -backend-config="bucket=foxtrot-provisioner-state-<account>"
@@ -35,3 +36,9 @@ provider "google" {
 # Token from Secrets Manager foxtrot/platform/cloudflare-iac-token, passed as CLOUDFLARE_API_TOKEN
 # at plan/apply time (kept out of the state).
 provider "cloudflare" {}
+
+# API token from Secrets Manager foxtrot/platform/tailscale-api-token, passed as TAILSCALE_API_KEY
+# at plan/apply time. "-" is the token's own tailnet.
+provider "tailscale" {
+  tailnet = "-"
+}

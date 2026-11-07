@@ -48,3 +48,9 @@ variable "startup_script" {
   default     = null
   description = "부팅마다 실행하는 스크립트 (멱등)"
 }
+
+variable "can_ip_forward" {
+  type        = bool
+  default     = false
+  description = "true: 남의 주소로 가는 패킷을 전달 (Tailscale 서브넷 라우터)"
+}

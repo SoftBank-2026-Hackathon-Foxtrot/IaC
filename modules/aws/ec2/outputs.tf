@@ -9,3 +9,7 @@ output "public_ip" {
 output "private_ip" {
   value = aws_instance.this.private_ip
 }
+
+output "source_dest_check" {
+  value = aws_instance.this.source_dest_check
+}

@@ -66,6 +66,25 @@ run "replication_opens_only_listed_ip" {
     error_message = "Cross-cloud replication gives RDS a public endpoint."
   }
 }
+run "tailscale_makes_the_vm_a_router" {
+  command = apply
+  variables {
+    deployment_id             = "fox-aws-poc01"
+    metadata                  = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01" }
+    region                    = "ap-northeast-2"
+    account_id                = "123456789012"
+    bucket_name               = "replace-with-globally-unique-aws-bucket"
+    final_snapshot_identifier = "fox-aws-poc01-final-unique"
+    network                   = { "vpc_cidr" = "10.10.0.0/16", "public_subnet_cidr" = "10.10.0.0/24", "private_subnet_cidrs" = ["10.10.10.0/24", "10.10.11.0/24"], "availability_zones" = ["ap-northeast-2a", "ap-northeast-2c"] }
+    ami_id                    = "ami-1234567890abcdef0"
+    app                       = { image = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/chiikawa-groupbuy:test" }
+    tailscale                 = { auth_key_secret = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:foxtrot/tailscale-authkey-aws" }
+  }
+  assert {
+    condition     = strcontains(module.app_runtime.script, "--advertise-routes='10.10.0.0/16'") && strcontains(module.app_runtime.script, "--advertise-tags='tag:aws'") && !module.ec2.source_dest_check
+    error_message = "With Tailscale the VM joins as tag:aws, routes its VPC and forwards packets."
+  }
+}
 run "reject_non_registry_image" {
   command = plan
   variables {

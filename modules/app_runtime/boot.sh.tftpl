@@ -45,6 +45,18 @@ STORAGE_SECRET="$(retry secret '${storage_secret}')"
 STORAGE_SECRET=""
 %{ endif ~}
 
+%{ if tailscale != null ~}
+# Private network to the platform: join the tailnet and route this VPC (managed DBs and caches
+# cannot run Tailscale, so this VM forwards for them). Not fatal: the app still starts.
+join_tailnet() {
+  command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
+  printf 'net.ipv4.ip_forward = 1\n' > /etc/sysctl.d/90-foxtrot-forward.conf && sysctl --system >/dev/null
+  systemctl enable --now tailscaled
+  tailscale up --authkey="$(retry secret '${tailscale.auth_key_secret}')" --hostname='${tailscale.hostname}' \
+    --advertise-tags='${tailscale.tag}' --advertise-routes='${join(",", tailscale.routes)}' --accept-routes --reset
+}
+join_tailnet || echo "tailscale join failed; continuing"
+%{ endif ~}
 umask 077
 cat > "$CONF/common.env" <<'EOF'
 ${common_env}

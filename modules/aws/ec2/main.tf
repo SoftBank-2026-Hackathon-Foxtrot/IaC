@@ -6,6 +6,7 @@ resource "aws_instance" "this" {
   iam_instance_profile        = var.instance_profile_name
   associate_public_ip_address = true
   key_name                    = var.key_name
+  source_dest_check           = var.source_dest_check
   user_data_base64            = var.user_data == null ? null : base64gzip(var.user_data)
   user_data_replace_on_change = true
   metadata_options {

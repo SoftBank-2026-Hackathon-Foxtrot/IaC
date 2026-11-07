@@ -87,6 +87,13 @@ class SpecTest(unittest.TestCase):
             with self.subTest(b=b), self.assertRaises(spec.RequestError):
                 self.render(b)
 
+    def test_tailscale_comes_from_the_server_config(self):
+        config = json.loads(json.dumps(CONFIG))
+        config["clouds"]["gcp"]["tailscale"] = {"authKeySecret": "projects/p/secrets/foxtrot-tailscale-authkey-gcp"}
+        tf = spec.render(spec.parse(body(cloud="gcp"), CATALOG, config), CATALOG, config, "a1b2", TODAY)
+        self.assertEqual(tf["tailscale"], {"auth_key_secret": "projects/p/secrets/foxtrot-tailscale-authkey-gcp", "tag": "tag:gcp"})
+        self.assertNotIn("tailscale", self.render(body()))
+
     def test_app_settings_pass_through(self):
         tf = self.render(body(app={"workerCount": 3, "seedDemoData": False, "env": {"CONTROL_PLANE_URL": "http://cp.internal:8000"}},
                               sizing={"compute_instance_type": "m6i.large"}))

@@ -137,3 +137,14 @@ resource "aws_vpc_security_group_ingress_rule" "replication_db" {
   to_port           = 5432
   tags              = var.tags
 }
+
+# Tailscale direct connections (it falls back to relays over 443 without this).
+resource "aws_vpc_security_group_egress_rule" "tailscale" {
+  for_each          = var.enable_tailscale ? toset(["41641", "3478"]) : toset([])
+  security_group_id = aws_security_group.app.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "udp"
+  from_port         = tonumber(each.value)
+  to_port           = tonumber(each.value)
+  tags              = var.tags
+}

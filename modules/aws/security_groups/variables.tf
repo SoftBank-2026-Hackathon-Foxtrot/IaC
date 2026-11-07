@@ -69,3 +69,8 @@ variable "replication_cidrs" {
     error_message = "복제 접속 허용은 /24~/32 CIDR만 받습니다."
   }
 }
+
+variable "enable_tailscale" {
+  type    = bool
+  default = false
+}

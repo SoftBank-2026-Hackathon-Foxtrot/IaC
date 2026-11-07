@@ -101,6 +101,7 @@ resource "google_secret_manager_secret_iam_member" "app" {
   for_each = merge(
     { app_db = google_secret_manager_secret.app_db.id, db_admin = google_secret_manager_secret.db_admin.id, storage = google_secret_manager_secret.storage.id },
     local.extra_secret_refs,
+    var.tailscale == null ? {} : { TAILSCALE = var.tailscale.auth_key_secret },
   )
   secret_id = each.value
   role      = "roles/secretmanager.secretAccessor"
@@ -130,10 +131,20 @@ module "app_runtime" {
     access_key_id = module.iam.hmac_access_id
     secret        = google_secret_manager_secret.storage.id
   }
+  tailscale = var.tailscale == null ? null : {
+    auth_key_secret = var.tailscale.auth_key_secret, tag = var.tailscale.tag,
+    routes          = [var.network.subnet_cidr, "${var.network.service_range_address}/${var.network.service_range_prefix}"], hostname = var.deployment_id
+  }
 }
 
 variable "force_destroy_storage" {
   type        = bool
   default     = false
   description = "환경을 지울 때 버킷에 객체가 남아 있어도 지웁니다. 프로비저닝 API가 만든 PoC 환경에서만 켭니다."
+}
+
+variable "tailscale" {
+  description = "플랫폼과의 사설망: 앱 VM이 이 키(projects/<p>/secrets/<name>)로 tailnet에 가입하고 VM·관리형 서비스 대역을 광고합니다"
+  type        = object({ auth_key_secret = string, tag = optional(string, "tag:gcp") })
+  default     = null
 }

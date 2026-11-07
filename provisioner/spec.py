@@ -125,6 +125,9 @@ def render(req: dict, catalog: dict, config: dict, suffix: str, today: dt.date) 
     for key, field in ACCESS_FIELDS[cloud].items():
         if key in req["access"]:
             tfvars[field] = req["access"][key]
+    if cloud_conf.get("tailscale"):  # private network to the platform, from the server config
+        tfvars["tailscale"] = {"auth_key_secret": cloud_conf["tailscale"]["authKeySecret"],
+                               "tag": cloud_conf["tailscale"].get("tag", f"tag:{cloud}")}
     if app.get("tunnel_secret"):  # cloudflared needs outbound 7844 to the Cloudflare edge
         tfvars["enable_cloudflare_tunnel"] = True
     try:

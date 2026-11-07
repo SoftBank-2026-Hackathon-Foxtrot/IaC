@@ -65,10 +65,20 @@ module "app_runtime" {
   }
   redis_url = "${var.redis_transit_encryption ? "rediss" : "redis"}://${module.elasticache.endpoint}:${module.elasticache.port}"
   storage   = { bucket = module.s3.bucket_id, region = var.region }
+  tailscale = var.tailscale == null ? null : {
+    auth_key_secret = var.tailscale.auth_key_secret, tag = var.tailscale.tag,
+    routes          = [var.network.vpc_cidr], hostname = var.deployment_id
+  }
 }
 
 variable "force_destroy_storage" {
   type        = bool
   default     = false
   description = "환경을 지울 때 버킷에 객체가 남아 있어도 지웁니다. 프로비저닝 API가 만든 PoC 환경에서만 켭니다."
+}
+
+variable "tailscale" {
+  description = "플랫폼과의 사설망: 앱 VM이 이 키(Secrets Manager ARN)로 tailnet에 가입하고 VPC 대역을 광고합니다"
+  type        = object({ auth_key_secret = string, tag = optional(string, "tag:aws") })
+  default     = null
 }

@@ -132,11 +132,10 @@ locals {
   # Values that come from other systems: created with the placeholder UNSET; owners overwrite
   # them (Terraform ignores later changes). Services treat UNSET as "not configured".
   external = {
-    "tailscale-authkey-mgmt" = "Tailscale auth key (tag:mgmt) for the platform gateway"
-    "cloudflare-api-token"   = "Cloudflare API token for the traffic service (LB edit, pool health read)"
-    "github-client-secret"   = "GitHub OAuth app secret for console login"
-    "redis-endpoints-proxy"  = "STATEMIG_ENDPOINTS for the Redis proxy: aws=redis://app@<aws>:6379,gcp=redis://app@<gcp>:6379"
-    "redis-endpoints-admin"  = "STATEMIG_ENDPOINTS for statemig and the sync worker (admin user)"
+    "cloudflare-api-token"  = "Cloudflare API token for the traffic service (LB edit, pool health read)"
+    "github-client-secret"  = "GitHub OAuth app secret for console login"
+    "redis-endpoints-proxy" = "STATEMIG_ENDPOINTS for the Redis proxy: aws=redis://app@<aws>:6379,gcp=redis://app@<gcp>:6379"
+    "redis-endpoints-admin" = "STATEMIG_ENDPOINTS for statemig and the sync worker (admin user)"
   }
 }
 resource "random_password" "generated" {
@@ -184,5 +183,6 @@ locals {
     { for k, s in aws_secretsmanager_secret.generated : k => s.arn },
     { for k, s in aws_secretsmanager_secret.external : k => s.arn },
     { "cloudflare-tunnel-platform" = aws_secretsmanager_secret.tunnel_platform.arn },
+    { "tailscale-authkey-mgmt" = aws_secretsmanager_secret.tailscale_mgmt.arn },
   )
 }

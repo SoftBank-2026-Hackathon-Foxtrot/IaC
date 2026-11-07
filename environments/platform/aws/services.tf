@@ -273,11 +273,13 @@ locals {
         accounts      = [data.aws_caller_identity.current.account_id]
         images        = { "chiikawa-groupbuy" = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com/chiikawa-groupbuy:latest" }
         imagePrefixes = ["${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com/"]
+        tailscale     = { authKeySecret = data.aws_secretsmanager_secret.tailscale_aws.arn, tag = "tag:aws" }
       })
       gcp = merge(local.provisioner_baseline.gcp, {
         projects      = [var.gcp_project_id]
         images        = { "chiikawa-groupbuy" = "asia-northeast3-docker.pkg.dev/${var.gcp_project_id}/apps/chiikawa-groupbuy:latest" }
         imagePrefixes = ["asia-northeast3-docker.pkg.dev/${var.gcp_project_id}/"]
+        tailscale     = { authKeySecret = "projects/${var.gcp_project_id}/secrets/foxtrot-tailscale-authkey-gcp", tag = "tag:gcp" }
       })
     }
   })

@@ -41,7 +41,7 @@ resource "aws_iam_role_policy" "gateway_secrets" {
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow", Action = ["secretsmanager:GetSecretValue"]
-      Resource = [aws_secretsmanager_secret.external["tailscale-authkey-mgmt"].arn, aws_secretsmanager_secret.tunnel_platform.arn]
+      Resource = [aws_secretsmanager_secret.tailscale_mgmt.arn, aws_secretsmanager_secret.tunnel_platform.arn]
     }]
   })
 }
@@ -62,7 +62,7 @@ resource "aws_instance" "gateway" {
   user_data = templatefile("${path.module}/gateway.sh.tftpl", {
     region        = var.region
     vpc_cidr      = var.vpc_cidr
-    tailscale_key = aws_secretsmanager_secret.external["tailscale-authkey-mgmt"].arn
+    tailscale_key = aws_secretsmanager_secret.tailscale_mgmt.arn
     tunnel_token  = aws_secretsmanager_secret.tunnel_platform.arn
     hostname      = "${var.name}-gw"
   })

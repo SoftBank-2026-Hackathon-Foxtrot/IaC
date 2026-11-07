@@ -108,3 +108,19 @@ resource "google_compute_firewall" "http" {
   }
   description = jsonencode(var.labels)
 }
+
+# Tailscale direct connections (it falls back to relays over 443 without this).
+resource "google_compute_firewall" "tailscale" {
+  count                   = var.enable_tailscale ? 1 : 0
+  name                    = "${var.name}-tailscale-out"
+  network                 = var.network_id
+  direction               = "EGRESS"
+  priority                = 1000
+  destination_ranges      = ["0.0.0.0/0"]
+  target_service_accounts = [var.app_service_account]
+  allow {
+    protocol = "udp"
+    ports    = ["41641", "3478"]
+  }
+  description = jsonencode(var.labels)
+}
