@@ -39,7 +39,7 @@ provider 버전을 갱신하면 각 root에서 `terraform providers lock -platfo
 저장소 root에서 실행합니다. AWS secret은 아래 명령 전에 외부에서 주입되어 있어야 합니다.
 
 ```bash
-python tools/render_inputs.py validate --cloud aws --base environments/aws/deployment.tfvars.json
+python -m control_plane.deployment.tools.render_inputs validate --cloud aws --base environments/aws/deployment.tfvars.json
 terraform -chdir=environments/aws init
 terraform -chdir=environments/aws plan -input=false -var-file=deployment.tfvars.json -out=reviewed.tfplan
 ```

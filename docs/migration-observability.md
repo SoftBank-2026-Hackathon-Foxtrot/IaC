@@ -4,7 +4,7 @@
 
 ```sh
 python -m pip install -r requirements-contracts.txt -r requirements-observability.txt
-python tools/report_observations.py --workflow "$WORKFLOW_ID" \
+python -m control_plane.deployment.tools.report_observations --workflow "$WORKFLOW_ID" \
   infra --job-json /run/jobs/apply-result.json --plan-json /run/jobs/plan.json --handoff-json /run/jobs/handoff.json
 ```
 

@@ -61,18 +61,18 @@ cp provisioner/config.example.json provisioner/config.json   # 계정·프로젝
 ```
 
 ```bash
-AWS_PROFILE=foxtrot python -m provisioner up --org chiikawa --cloud aws
+AWS_PROFILE=foxtrot python -m control_plane.deployment.provisioner up --org chiikawa --cloud aws
 ```
 
 GCP는 ADC(`gcloud auth application-default login`)로 실행합니다.
 
 ```bash
-python -m provisioner up --org chiikawa --cloud gcp
+python -m control_plane.deployment.provisioner up --org chiikawa --cloud gcp
 ```
 
-`--plan-only`는 계획까지만 만듭니다. `render`는 클라우드를 건드리지 않고 Terraform 입력만 출력합니다. 지우기는 `python -m provisioner down <environmentId>`입니다.
+`--plan-only`는 계획까지만 만듭니다. `render`는 클라우드를 건드리지 않고 Terraform 입력만 출력합니다. 지우기는 `python -m control_plane.deployment.provisioner down <environmentId>`입니다.
 
-## API (`python -m provisioner serve`)
+## API (`python -m control_plane.deployment.provisioner serve`)
 
 ```http
 POST /v1/environments

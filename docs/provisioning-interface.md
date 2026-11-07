@@ -60,8 +60,8 @@ GCP 대상은 `{"overrides": {"compute_machine_type": "e2-medium"}}`. 변경할 
 로컬에서 동일한 입력 경계를 확인할 수 있다.
 
 ```bash
-python tools/render_inputs.py context --cloud gcp --base environments/gcp/deployment.example.tfvars.json
-python tools/render_inputs.py render-overrides --cloud gcp --base environments/gcp/deployment.example.tfvars.json --request contracts/examples/gcp-plan-request.json --output reviewed.tfvars.json
+python -m control_plane.deployment.tools.render_inputs context --cloud gcp --base environments/gcp/deployment.example.tfvars.json
+python -m control_plane.deployment.tools.render_inputs render-overrides --cloud gcp --base environments/gcp/deployment.example.tfvars.json --request contracts/examples/gcp-plan-request.json --output reviewed.tfvars.json
 ```
 
 적용 후 플랫폼이 VM 출력을 등록하고 [COMPUTE](../compute/README.md)에 `targetRef`를 넘긴다.
@@ -102,4 +102,4 @@ v0.1의 신규 배포 초안 관리 계약을 이 문서가 대체한다. 템플
 
 ## 명세 검증
 
-`python tools/build_contract.py`로 카탈로그 기반 OpenAPI·예시를 생성한다. `--check`와 `python -m unittest discover -s tests -v`로 형식·입력 경계를 검사한다. 서버의 권한·동시성·실제 클라우드 변경을 검증한 결과는 아니다.
+`python -m control_plane.deployment.tools.build_contract`로 카탈로그 기반 OpenAPI·예시를 생성한다. `--check`와 `python -m unittest discover -s tests -v`로 형식·입력 경계를 검사한다. 서버의 권한·동시성·실제 클라우드 변경을 검증한 결과는 아니다.

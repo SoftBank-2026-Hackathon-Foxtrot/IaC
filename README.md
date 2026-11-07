@@ -4,7 +4,7 @@
 
 Terraform 모듈 `v0.1` / 연동 계약 `v0.3` / PoC·개발 환경 전용. Kubernetes는 필요하지 않습니다.
 
-**새로: 첫 배포부터 IaC로.** 각 루트가 네트워크·데이터 저장소와 함께 레지스트리 이미지로 **실행 중인 앱**까지 만듭니다. `python -m provisioner up --org chiikawa --cloud aws` 한 줄, 또는 org·클라우드를 본문으로 받는 `POST /v1/environments` API로 띄웁니다. → [앱 환경 프로비저닝](docs/environment-provisioning.md)
+**새로: 첫 배포부터 IaC로.** 각 루트가 네트워크·데이터 저장소와 함께 레지스트리 이미지로 **실행 중인 앱**까지 만듭니다. `python -m control_plane.deployment.provisioner up --org chiikawa --cloud aws` 한 줄, 또는 org·클라우드를 본문으로 받는 `POST /v1/environments` API로 띄웁니다. → [앱 환경 프로비저닝](docs/environment-provisioning.md)
 
 ## 무엇을 만드는가
 
@@ -118,7 +118,7 @@ terraform -chdir=environments/gcp test
 ```
 
 ```bash
-python tools/render_inputs.py render --cloud aws \
+python -m control_plane.deployment.tools.render_inputs render --cloud aws \
   --base environments/aws/deployment.example.tfvars.json \
   --proposal examples/aws-recommendation.json \
   --output environments/aws/proposal.tfvars.json
