@@ -2,9 +2,9 @@
 # traffic part's test server (tunnel foxtrot-traffic-gcp, VM foxtrot-traffic-test-b).
 #
 # The Cloudflare account allows two load-balancer origins in all, both in use (pools "aws" and
-# "gcp"), so this app gets no pool of its own. For our tests the "gcp" pool's origin is pointed at
-# this tunnel, and back at the test server afterwards: tools/gcp_pool_origin.sh. The tunnel answers
-# the hostnames that pool and its monitor send (app.foxtrot.live, gcp.foxtrot.live).
+# "gcp"), so this app gets no pool of its own: a pool's origin is pointed at this tunnel while that
+# pool carries no traffic (tools/pool_origin.py). The tunnel answers the hostnames users and both
+# pools' monitors send (app, aws and gcp .foxtrot.live), so it can take either pool.
 
 locals {
   app_host = "app.foxtrot.live"
@@ -27,6 +27,7 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "chiikawa_gcp" {
   config = {
     ingress = [
       { hostname = local.app_host, service = "http://localhost:8000" },
+      { hostname = "aws.${var.cloudflare_zone}", service = "http://localhost:8000" },
       { hostname = "gcp.${var.cloudflare_zone}", service = "http://localhost:8000" },
       { hostname = "chiikawa-gcp.${var.cloudflare_zone}", service = "http://localhost:8000" },
       { service = "http_status:404" },
