@@ -26,7 +26,7 @@ SUFFIX = re.compile(r"^[a-f0-9]{4}$")
 APP_FIELDS = {  # request (camelCase) -> Terraform app object
     "image": "image", "apiWorkers": "api_workers", "workerCount": "worker_count", "seedDemoData": "seed_demo_data",
     "env": "env", "apiEnv": "api_env", "workerEnv": "worker_env", "secretEnv": "secret_env",
-    "tunnelSecret": "tunnel_secret", "port": "port", "healthPath": "health_path",
+    "tunnelSecret": "tunnel_secret", "port": "port", "dbPasswordSecret": "db_password_secret", "healthPath": "health_path",
 }
 ACCESS_FIELDS = {
     "aws": {"replicationCidrs": "replication_cidrs", "proxyCidrs": "proxy_cidrs", "migrationSourceCidrs": "migration_source_cidrs",

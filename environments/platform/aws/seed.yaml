@@ -1,6 +1,5 @@
-# Control-plane seed for the chiikawa group-buy app (AWS → GCP). The database is left out for now:
-# the DB migration comes later, so the plan skips its cutover and never calls the DB adapter.
-# Add resources.database and adapters.database to take it back in (see the control-plane README).
+# Control-plane seed for the chiikawa group-buy app (AWS → GCP). Resources left out are skipped:
+# their cutover stage is SKIPPED and their adapter never called (control-plane README).
 #
 # Keep in step with the deployment:
 #   environments.*.appUrl   app VM private IP and port, reached over the tailnet. A VM replaced by
@@ -23,20 +22,39 @@ environments:
     actors: {chiikawa-gcp-api: 4, chiikawa-gcp-worker: 2}
 
 resources:
-  redis:
-    sourceRef: resource:aws
-    targetRef: resource:gcp
-    bindingRef: binding:redis-proxy
-    policy: {rollbackMode: REVERSE_REQUIRED, maxQuiesceSeconds: 1.8}
-  object:
-    sourceRef: resource:aws-receipts
-    targetRef: resource:gcp-receipts
-    bindingRef: binding:receipts
-    # Every API and worker process of both environments follows the route on its own.
-    expectedApps: 12
-    policy: {rollbackMode: REVERSE_REQUIRED, maxQuiesceSeconds: 30}
+  # This run moves the database only: Redis and the receipts bucket already moved to GCP (first e2e,
+  # 2026-11-07), and a new plan for them would start from the current target. The source entry is
+  # exactly what the binding registered (db:chiikawa-aws-3e3d); the catalog cannot change it.
+  database:
+    sourceRef: db:chiikawa-aws-3e3d
+    targetRef: db:chiikawa-gcp-1975
+    policy: {rollbackMode: BEFORE_TARGET_WRITE, maxQuiesceSeconds: 60}
+    catalog:
+      alias: chiikawa
+      appRef: app:chiikawa
+      tables: [public.chat_messages, public.groupbuys, public.join_requests, public.notifications, public.orders, public.stats]
+      sequences: []
+      databases:
+        db:chiikawa-aws-3e3d:
+          identity: AWS_RDS:arn:aws:rds:ap-northeast-2:952561150367:db:chiikawa-aws-3e3d-db/app
+          provider: AWS_RDS
+          provider_instance: arn:aws:rds:ap-northeast-2:952561150367:db:chiikawa-aws-3e3d-db
+          secret_ref: arn:aws:secretsmanager:ap-northeast-2:952561150367:secret:foxtrot/app/chiikawa-aws-3e3d/db-operator-iE9FAT
+          writer_role: app
+          route_host: chiikawa-aws-3e3d-db.cxg4inxrw1qh.ap-northeast-2.rds.amazonaws.com
+          database: app
+        db:chiikawa-gcp-1975:
+          identity: GCP_CLOUDSQL:projects/foxtrot-513413/instances/chiikawa-gcp-1975-db/app
+          provider: GCP_CLOUDSQL
+          provider_instance: projects/foxtrot-513413/instances/chiikawa-gcp-1975-db
+          secret_ref: __CHIIKAWA_CLOUDSQL_SECRET_REF__  # filled by Terraform (cloudsql_target.tf)
+          writer_role: app
+          route_host: 27-d9eb3522-319b-442c-97dc-48420699f4f7.asia-northeast3.sql.goog
+          database: app
 
 adapters:
+  database: {url: "https://db-proxy.internal:8080", tokenSecret: "env:DB_ADAPTER_TOKEN", verify: "/tmp/foxtrot-ca.pem"}
+  # Kept for the next Redis/object run (GCP → AWS); not called while those resources are left out.
   redis: {url: "http://redis-migrator.internal:8090", tokenSecret: "env:REDIS_ADAPTER_TOKEN"}
   object: {url: "http://object-migration.internal:8080", tokenSecret: "env:OBJECT_ADAPTER_TOKEN"}
 

@@ -61,6 +61,10 @@ data "aws_secretsmanager_secret_version" "rds_master" {
 }
 locals {
   rds_master = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)
+  # The replication DSN is also what the target (Cloud SQL) subscribes with, so it names no local
+  # CA file; the adaptor accepts sslmode=require for it and keeps verify-full for its own sessions.
+  rds_replication_dsn = format("postgresql://%s:%s@%s:%d/%s?sslmode=require",
+  urlencode(local.rds_master.username), urlencode(local.rds_master.password), module.rds.address, module.rds.port, var.database_name)
   rds_admin_dsn = format("postgresql://%s:%s@%s:%d/%s?sslmode=verify-full&sslrootcert=/run/foxtrot/server-ca.crt",
   urlencode(local.rds_master.username), urlencode(local.rds_master.password), module.rds.address, module.rds.port, var.database_name)
 }
@@ -74,7 +78,7 @@ resource "aws_secretsmanager_secret_version" "db_operator" {
   secret_id = aws_secretsmanager_secret.db_operator.id
   secret_string = jsonencode({
     adminDsn       = local.rds_admin_dsn
-    replicationDsn = local.rds_admin_dsn
+    replicationDsn = local.rds_replication_dsn
     writerPassword = random_password.app_db.result
   })
 }
