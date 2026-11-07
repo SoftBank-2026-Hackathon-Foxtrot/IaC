@@ -13,12 +13,12 @@ mkdir -p "$CONF" && chmod 700 "$CONF"
 retry() { local n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 30 ] && return 1; sleep 10; done; }
 
 %{ if cloud == "gcp" && tailscale != null ~}
-# After a reboot tailscaled starts before this script and can hold /etc/resolv.conf with no
-# upstream resolver, so nothing outside the tailnet resolves. Start again from the VPC resolver;
-# join_tailnet below puts MagicDNS (and the platform's *.internal names) back on top of it.
-if command -v tailscale >/dev/null; then
-  tailscale down || true
-  printf 'nameserver 169.254.169.254\nsearch google.internal\n' > /etc/resolv.conf
+# Keep /etc/resolv.conf on systemd-resolved's stub. Tailscale then adds only a ~internal route on
+# tailscale0 (the platform's *.internal names) and leaves the VPC resolver for everything else.
+# If it owns the file instead, it loses the upstream resolver after a reboot and nothing resolves.
+if [ -e /run/systemd/resolve/stub-resolv.conf ] && [ "$(readlink -f /etc/resolv.conf)" != /run/systemd/resolve/stub-resolv.conf ]; then
+  ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+  systemctl restart tailscaled 2>/dev/null || true
 fi
 %{ endif ~}
 %{ if cloud == "aws" ~}
