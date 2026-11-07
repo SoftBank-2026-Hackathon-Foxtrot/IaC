@@ -82,8 +82,16 @@ ${worker_env}
 EOF
 sed -i "s|__APP_DB_PASSWORD__|$APP_DB_PASSWORD|g; s|__STORAGE_SECRET__|$STORAGE_SECRET|g" "$CONF/common.env"
 %{ for name, ref in secret_env ~}
-printf '%s=%s\n' '${name}' "$(retry secret '${ref}')" >> "$CONF/common.env"
+SECRET_VALUE="$(retry secret '${ref}')"
+printf '%s=%s\n' '${name}' "$SECRET_VALUE" >> "$CONF/common.env"
+# Other values may carry it as __${name}__, e.g. the password inside a DATABASE_URL.
+SECRET_VALUE="$SECRET_VALUE" python3 -c 'import os, sys
+for path in sys.argv[2:]:
+    text = open(path).read()
+    open(path, "w").write(text.replace("__" + sys.argv[1] + "__", os.environ["SECRET_VALUE"]))' \
+  '${name}' "$CONF/common.env" "$CONF/api.env" "$CONF/worker.env"
 %{ endfor ~}
+unset SECRET_VALUE
 
 # Database: login and grants only. Schema and data belong to the app. The admin password only lives in this file
 # for the one-shot container and is removed right after.
