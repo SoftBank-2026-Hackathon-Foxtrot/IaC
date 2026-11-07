@@ -25,12 +25,29 @@ variable "chiikawa_cloudsql" {
   }
 }
 
+variable "chiikawa_cloudsql_subscriber_vpc_ids" {
+  description = "App VPCs whose RDS may subscribe to this Cloud SQL (a GCP → AWS migration): they resolve the certificate name through the same private zone"
+  type        = list(string)
+  default     = ["vpc-0e9277f9de11deee9"] # chiikawa-aws-3e3d (environments/aws, tailscale/aws tfvars)
+}
+
 resource "aws_route53_zone" "chiikawa_cloudsql" {
   name    = var.chiikawa_cloudsql.cert_dns_name
   comment = "Cloud SQL ${var.chiikawa_cloudsql.instance}: its certificate name, for verify-full from the platform"
   vpc {
     vpc_id = aws_vpc.this.id
   }
+  # The remaining associations are separate resources so the zone itself never changes.
+  lifecycle {
+    ignore_changes = [vpc]
+  }
+}
+# RDS in the app VPC reaches Cloud SQL's private address over the tailnet routers; it still has
+# to resolve the *.sql.goog name its replication DSN carries.
+resource "aws_route53_zone_association" "chiikawa_cloudsql_subscribers" {
+  for_each = toset(var.chiikawa_cloudsql_subscriber_vpc_ids)
+  zone_id  = aws_route53_zone.chiikawa_cloudsql.zone_id
+  vpc_id   = each.value
 }
 resource "aws_route53_record" "chiikawa_cloudsql" {
   zone_id = aws_route53_zone.chiikawa_cloudsql.zone_id
