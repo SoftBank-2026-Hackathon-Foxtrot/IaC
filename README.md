@@ -35,6 +35,7 @@ flowchart LR
 ## 먼저 볼 파일
 
 - [main 통합과 준비 상태](docs/release-integration.md) — 기존 입력 호환, 인프라/앱 준비 구분, 공유 Tailscale, 관측 연결
+- [클라우드 → 온프렘 설계](docs/on-prem-migration-design.md) — Ansible 실행기, 공통 입출력, 앱 스키마·준비 단계, 모듈별 수정 위치
 
 - [앱 환경 프로비저닝](docs/environment-provisioning.md) — 앱 환경 생성·수정·삭제 CLI와 API
 - [EC2 → GCE 전환·롤백 검증 기록](docs/compute-cloud-rehearsal.md) — 세션 요청 291건 성공, WebSocket·주문 확인, 임시 자원 정리
