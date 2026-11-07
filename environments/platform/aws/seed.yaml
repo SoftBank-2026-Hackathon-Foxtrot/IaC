@@ -11,6 +11,18 @@
 application: chiikawa
 scope: scope:chiikawa
 
+# Explicit shared system-metric readers; IDs match the provisioner records.
+# Removing an entry revokes shared metric access. It does not delete the app.
+systemDeployments:
+  - environmentId: env-784e02b9c9d5
+    deploymentId: chiikawa-aws-3e3d
+    ownerId: chiikawa
+    environment: aws
+  - environmentId: env-4f5690bb766b
+    deploymentId: chiikawa-gcp-1975
+    ownerId: chiikawa
+    environment: gcp
+
 environments:
   aws:
     appUrl: http://10.10.0.79:8000
