@@ -356,12 +356,12 @@ module "control_plane" {
       CONTROL_PLANE_ENVIRONMENT              = "production"
       CONTROL_PLANE_OBSERVATION_TOKEN_SECRET = "env:OBSERVATION_TOKEN"
       CONTROL_PLANE_SEED_PATH                = "/tmp/seed.yaml"
-      CONTROL_PLANE_SEED_YAML                = file("${path.module}/seed.yaml")
+      CONTROL_PLANE_SEED_YAML                = local.control_seed_yaml
       FOXTROT_CA_PEM                         = local.ca_pem
       CONTROL_PLANE_TABLE_NAME               = aws_dynamodb_table.pk_sk["foxtrot-control-plane"].name
       CONTROL_PLANE_REGION                   = var.region
       CONTROL_PLANE_DB_GATE_TABLE            = aws_dynamodb_table.db_operator.name
-      CONTROL_PLANE_DB_GATE_NAMESPACE        = local.db_namespace
+      CONTROL_PLANE_DB_GATE_NAMESPACE        = local.control_db_namespace
       CONTROL_PLANE_TRAFFIC_URL              = "http://traffic.internal:8001"
       CONTROL_PLANE_PUBLIC_URL               = var.console_url
       CONTROL_PLANE_ALLOWED_ORIGINS          = jsonencode([var.console_url])
@@ -376,8 +376,8 @@ module "control_plane" {
       TRAFFIC_SERVICE_TOKEN = local.secret_arn["traffic-service-token"]
       WORKLOAD_TOKEN        = local.secret_arn["workload-token"]
       GITHUB_CLIENT_SECRET  = local.secret_arn["github-client-secret"]
-      DB_ADAPTER_TOKEN      = local.secret_arn["db-adapter-token"]
-      REDIS_ADAPTER_TOKEN   = local.secret_arn["redis-admin-token"]
+      DB_ADAPTER_TOKEN      = local.control_db_token
+      REDIS_ADAPTER_TOKEN   = local.control_redis_token
       OBJECT_ADAPTER_TOKEN  = local.secret_arn["object-adapter-token"]
     })
     health = ["python -c \"import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=2)\""]

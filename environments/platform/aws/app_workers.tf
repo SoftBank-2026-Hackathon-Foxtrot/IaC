@@ -48,6 +48,20 @@ module "application_workers" {
   depends_on                 = [aws_efs_mount_target.state, aws_secretsmanager_secret_version.db_runtime]
 }
 
+locals {
+  configured_seed = yamldecode(file("${path.module}/seed.yaml"))
+  control_workers = try(module.application_workers[local.configured_seed.application].application, null)
+  control_seed_yaml = local.control_workers == null ? file("${path.module}/seed.yaml") : yamlencode(merge(local.configured_seed, {
+    adapters = merge(local.configured_seed.adapters, {
+      database = merge(local.configured_seed.adapters.database, { url = local.control_workers.database.url })
+      redis    = merge(local.configured_seed.adapters.redis, { url = local.control_workers.redis.url })
+    })
+  }))
+  control_db_namespace = local.control_workers == null ? local.db_namespace : local.control_workers.dbNamespace
+  control_db_token     = local.control_workers == null ? local.secret_arn["db-adapter-token"] : local.control_workers.database.tokenSecret
+  control_redis_token  = local.control_workers == null ? local.secret_arn["redis-admin-token"] : local.control_workers.redis.tokenSecret
+}
+
 output "application_workers" {
   value = { for app, workers in module.application_workers : app => workers.application }
 }
