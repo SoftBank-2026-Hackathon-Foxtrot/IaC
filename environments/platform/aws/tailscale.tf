@@ -18,7 +18,9 @@ resource "tailscale_acl" "this" {
     tagOwners = { for t in values(local.ts_tags) : t => ["autogroup:admin"] }
     acls = [
       # Platform and app environments reach each other and the VPC ranges they advertise.
-      { action = "accept", src = values(local.ts_tags),
+      # Sources include the advertised ranges: a platform task (10.30.x) keeps its own address
+      # through the gateway, and the receiving router checks that address against this rule.
+      { action = "accept", src = concat(values(local.ts_tags), keys(local.ts_routes)),
       dst = concat([for t in values(local.ts_tags) : "${t}:*"], [for r in keys(local.ts_routes) : "${r}:*"]) },
       { action = "accept", src = ["autogroup:admin"], dst = ["*:*"] },
     ]
