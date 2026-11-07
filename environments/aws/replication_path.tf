@@ -29,7 +29,7 @@ resource "aws_vpc_security_group_egress_rule" "db_to_remote" {
   ip_protocol       = "tcp"
   from_port         = 5432
   to_port           = 5432
-  description       = "RDS subscribes to the other cloud's PostgreSQL through the app VM"
+  description       = "RDS subscribes to PostgreSQL in the other cloud through the app VM"
 }
 
 # Packets the VM forwards for RDS arrive on its interface.
