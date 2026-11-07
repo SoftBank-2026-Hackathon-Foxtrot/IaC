@@ -1,4 +1,4 @@
-# Control-plane seed for the chiikawa group-buy app (AWS → GCP). Resources left out are skipped:
+# Control-plane seed for the chiikawa group-buy app (GCP → AWS). Resources left out are skipped:
 # their cutover stage is SKIPPED and their adapter never called (control-plane README).
 #
 # Keep in step with the deployment:
@@ -22,12 +22,13 @@ environments:
     actors: {chiikawa-gcp-api: 4, chiikawa-gcp-worker: 2}
 
 resources:
-  # This run moves the database only: Redis and the receipts bucket already moved to GCP (first e2e,
-  # 2026-11-07), and a new plan for them would start from the current target. The source entry is
-  # exactly what the binding registered (db:chiikawa-aws-3e3d); the catalog cannot change it.
+  # Everything moves back to AWS. The control plane hands these refs to the adapters as they are:
+  # the direction picked in the console sets only the traffic and the probes, so start the workflow
+  # as gcp → aws. Every resource already lives on GCP (e2e of 2026-11-07/08), and the database
+  # binding's current databaseRef is db:chiikawa-gcp-1975, which must equal sourceRef.
   database:
-    sourceRef: db:chiikawa-aws-3e3d
-    targetRef: db:chiikawa-gcp-1975
+    sourceRef: db:chiikawa-gcp-1975
+    targetRef: db:chiikawa-aws-3e3d
     policy: {rollbackMode: BEFORE_TARGET_WRITE, maxQuiesceSeconds: 60}
     catalog:
       alias: chiikawa
@@ -51,10 +52,21 @@ resources:
           writer_role: app
           route_host: 27-d9eb3522-319b-442c-97dc-48420699f4f7.asia-northeast3.sql.goog
           database: app
+  redis:
+    sourceRef: resource:gcp
+    targetRef: resource:aws
+    bindingRef: binding:redis-proxy
+    policy: {rollbackMode: REVERSE_REQUIRED, maxQuiesceSeconds: 1.8}
+  object:
+    sourceRef: resource:gcp-receipts
+    targetRef: resource:aws-receipts
+    bindingRef: binding:receipts
+    # Every API and worker process of both environments follows the route on its own.
+    expectedApps: 12
+    policy: {rollbackMode: REVERSE_REQUIRED, maxQuiesceSeconds: 30}
 
 adapters:
   database: {url: "https://db-proxy.internal:8080", tokenSecret: "env:DB_ADAPTER_TOKEN", verify: "/tmp/foxtrot-ca.pem"}
-  # Kept for the next Redis/object run (GCP → AWS); not called while those resources are left out.
   redis: {url: "http://redis-migrator.internal:8090", tokenSecret: "env:REDIS_ADAPTER_TOKEN"}
   object: {url: "http://object-migration.internal:8080", tokenSecret: "env:OBJECT_ADAPTER_TOKEN"}
 
