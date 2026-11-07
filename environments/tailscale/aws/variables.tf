@@ -87,3 +87,27 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "app_ports" {
+  type        = set(number)
+  default     = []
+  description = "App HTTP readiness ports, restricted to remote_cidrs."
+  validation {
+    condition     = alltrue([for p in var.app_ports : p >= 1 && p <= 65535 && floor(p) == p])
+    error_message = "Use integer TCP ports from 1 to 65535."
+  }
+}
+variable "service_ports" {
+  type        = set(number)
+  default     = []
+  description = "Explicit platform proxy/adapter ports required over the routed private networks."
+  validation {
+    condition     = alltrue([for p in var.service_ports : contains([6432, 7000, 8000, 8001, 8080, 8090], p)])
+    error_message = "Select only the platform's known proxy/adapter ports."
+  }
+}
+
+variable "app_security_group_ids" {
+  type    = set(string)
+  default = []
+}

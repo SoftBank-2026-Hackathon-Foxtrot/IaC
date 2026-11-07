@@ -268,6 +268,7 @@ locals {
     deletionProtection  = false
     forceDestroyStorage = true
     expiresInDays       = 30
+    observations        = { controlPlaneUrl = "http://control-plane.internal:8000", tokenEnv = "OBSERVATION_TOKEN" }
     clouds = {
       aws = merge(local.provisioner_baseline.aws, {
         accounts      = [data.aws_caller_identity.current.account_id]
@@ -302,7 +303,7 @@ module "provisioner" {
       PROVISIONER_CONFIG_JSON = local.provisioner_config
       AWS_REGION              = var.region
     }
-    secrets = { PROVISIONER_TOKEN = local.secret_arn["provisioner-token"], GOOGLE_CREDENTIALS = aws_secretsmanager_secret.gcp["provisioner"].arn }
+    secrets = { OBSERVATION_TOKEN = local.secret_arn["observation-token"], PROVISIONER_TOKEN = local.secret_arn["provisioner-token"], GOOGLE_CREDENTIALS = aws_secretsmanager_secret.gcp["provisioner"].arn }
     mounts  = { work = "/var/lib/foxtrot-provisioner" }
     health  = ["python -c \"import urllib.request as u; u.urlopen('http://127.0.0.1:8070/health', timeout=2)\""]
   }]
@@ -341,21 +342,23 @@ module "control_plane" {
     entryPoint = ["sh", "-c"]
     command    = ["printf '%s' \"$CONTROL_PLANE_SEED_YAML\" > /tmp/seed.yaml && printf '%s' \"$FOXTROT_CA_PEM\" > /tmp/foxtrot-ca.pem && exec control-plane"]
     environment = {
-      CONTROL_PLANE_ENVIRONMENT        = "production"
-      CONTROL_PLANE_SEED_PATH          = "/tmp/seed.yaml"
-      CONTROL_PLANE_SEED_YAML          = file("${path.module}/seed.yaml")
-      FOXTROT_CA_PEM                   = local.ca_pem
-      CONTROL_PLANE_TABLE_NAME         = aws_dynamodb_table.pk_sk["foxtrot-control-plane"].name
-      CONTROL_PLANE_REGION             = var.region
-      CONTROL_PLANE_DB_GATE_TABLE      = aws_dynamodb_table.db_operator.name
-      CONTROL_PLANE_DB_GATE_NAMESPACE  = local.db_namespace
-      CONTROL_PLANE_TRAFFIC_URL        = "http://traffic.internal:8001"
-      CONTROL_PLANE_PUBLIC_URL         = var.console_url
-      CONTROL_PLANE_ALLOWED_ORIGINS    = jsonencode([var.console_url])
-      CONTROL_PLANE_GITHUB_CLIENT_ID   = var.github_client_id
-      CONTROL_PLANE_GITHUB_ALLOWED_IDS = jsonencode(var.github_allowed_ids)
+      CONTROL_PLANE_ENVIRONMENT              = "production"
+      CONTROL_PLANE_OBSERVATION_TOKEN_SECRET = "env:OBSERVATION_TOKEN"
+      CONTROL_PLANE_SEED_PATH                = "/tmp/seed.yaml"
+      CONTROL_PLANE_SEED_YAML                = file("${path.module}/seed.yaml")
+      FOXTROT_CA_PEM                         = local.ca_pem
+      CONTROL_PLANE_TABLE_NAME               = aws_dynamodb_table.pk_sk["foxtrot-control-plane"].name
+      CONTROL_PLANE_REGION                   = var.region
+      CONTROL_PLANE_DB_GATE_TABLE            = aws_dynamodb_table.db_operator.name
+      CONTROL_PLANE_DB_GATE_NAMESPACE        = local.db_namespace
+      CONTROL_PLANE_TRAFFIC_URL              = "http://traffic.internal:8001"
+      CONTROL_PLANE_PUBLIC_URL               = var.console_url
+      CONTROL_PLANE_ALLOWED_ORIGINS          = jsonencode([var.console_url])
+      CONTROL_PLANE_GITHUB_CLIENT_ID         = var.github_client_id
+      CONTROL_PLANE_GITHUB_ALLOWED_IDS       = jsonencode(var.github_allowed_ids)
     }
     secrets = {
+      OBSERVATION_TOKEN     = local.secret_arn["observation-token"]
       TRAFFIC_SERVICE_TOKEN = local.secret_arn["traffic-service-token"]
       WORKLOAD_TOKEN        = local.secret_arn["workload-token"]
       GITHUB_CLIENT_SECRET  = local.secret_arn["github-client-secret"]

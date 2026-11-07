@@ -18,7 +18,7 @@ data "aws_route_table" "clients" {
   route_table_id = each.value
 }
 locals {
-  forwarding_ports = setunion(toset([5432]), var.redis_ports)
+  forwarding_ports = setunion(toset([5432]), var.redis_ports, var.app_ports, var.service_ports)
 }
 
 module "bootstrap" {
@@ -181,4 +181,14 @@ output "private_ip" { value = aws_instance.router.private_ip }
 output "advertised_cidrs" { value = [data.aws_vpc.network.cidr_block] }
 output "routing_scope" {
   value = { route_table_ids = var.route_table_ids, remote_cidrs = var.remote_cidrs, db_port = 5432, redis_ports = var.redis_ports }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "remote_app" {
+  for_each = { for pair in setproduct(var.app_security_group_ids, var.remote_cidrs, var.app_ports) :
+  "${pair[0]}:${pair[1]}:${pair[2]}" => { group = pair[0], cidr = pair[1], port = pair[2] } }
+  security_group_id = each.value.group
+  ip_protocol       = "tcp"
+  from_port         = each.value.port
+  to_port           = each.value.port
+  cidr_ipv4         = each.value.cidr
 }

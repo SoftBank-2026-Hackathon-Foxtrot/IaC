@@ -37,11 +37,15 @@ run "root_wiring" {
     sizing              = { "compute_machine_type" = "e2-small", "compute_disk_gib" = 30, "db_tier" = "db-custom-1-3840", "db_storage_gib" = 20, "db_max_storage_gib" = 100, "db_high_availability" = false, "cache_memory_gib" = 1, "cache_high_availability" = false }
   }
   assert {
+    condition     = !strcontains(module.app_runtime[0].script, "init_schema") && !strcontains(module.app_runtime[0].script, "/seed?")
+    error_message = "App schema creation and seed data belong to the user app, not IaC."
+  }
+  assert {
     condition     = output.handoff.cloud == "gcp" && output.handoff.schema_version == 1
     error_message = "GCP handoff contract must remain stable."
   }
   assert {
-    condition     = strcontains(module.app_runtime.script, "oauth2accesstoken") && strcontains(module.app_runtime.script, "chiikawa-groupbuy:test") && !strcontains(module.app_runtime.script, "TESTONLY") && strcontains(module.app_runtime.script, "S3_ENDPOINT=https://storage.googleapis.com")
+    condition     = strcontains(module.app_runtime[0].script, "oauth2accesstoken") && strcontains(module.app_runtime[0].script, "chiikawa-groupbuy:test") && !strcontains(module.app_runtime[0].script, "TESTONLY") && strcontains(module.app_runtime[0].script, "S3_ENDPOINT=https://storage.googleapis.com")
     error_message = "The VM must pull from Artifact Registry, use GCS through its S3 API and keep secrets out of metadata."
   }
   assert {
@@ -236,4 +240,27 @@ run "management_reject_public" {
     enable_cloudflare_tunnel = true
   }
   expect_failures = [var.proxy_cidrs]
+}
+
+run "legacy_infrastructure_only" {
+  command = apply
+  variables {
+    deployment_id       = "fox-gcp-poc01"
+    metadata            = { "project" = "foxtrot", "environment" = "poc", "owner" = "platform-team", "cost_center" = "hackathon", "workload" = "web", "migration_id" = "mig-001", "data_class" = "internal", "expires_on" = "2026-12-01" }
+    region              = "asia-northeast3"
+    zone                = "asia-northeast3-a"
+    project_id          = "replace-with-project-id"
+    bucket_name         = "replace-with-globally-unique-gcp-bucket"
+    database_name       = "app"
+    web_ingress_cidrs   = ["0.0.0.0/0"]
+    web_ports           = [80, 443]
+    admin_cidrs         = []
+    deletion_protection = true
+    network             = { "subnet_cidr" = "10.20.0.0/24", "service_range_address" = "10.21.0.0", "service_range_prefix" = 16 }
+    sizing              = { "compute_machine_type" = "e2-small", "compute_disk_gib" = 30, "db_tier" = "db-custom-1-3840", "db_storage_gib" = 20, "db_max_storage_gib" = 100, "db_high_availability" = false, "cache_memory_gib" = 1, "cache_high_availability" = false }
+  }
+  assert {
+    condition     = output.handoff.app == null && output.handoff.cache.tls_required && output.handoff.database.version == "16"
+    error_message = "Legacy inputs retain infrastructure-only deployment, PG16 and cache TLS."
+  }
 }

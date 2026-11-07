@@ -7,8 +7,6 @@ output "script" {
     port                = var.app.port
     api_workers         = var.app.api_workers
     worker_count        = var.app.worker_count
-    seed_demo_data      = var.app.seed_demo_data
-    seed_close_in_s     = var.app.seed_close_in_s
     secret_env          = var.app.secret_env
     tunnel_token_secret = var.app.tunnel_secret
     cloudflared_image   = var.app.cloudflared_image
@@ -18,7 +16,6 @@ output "script" {
     api_env             = local.lines.api
     worker_env          = local.lines.worker
     bootstrap_py        = file("${path.module}/bootstrap_db.py")
-    tailscale           = var.tailscale
   })
 }
 output "app_env_keys" {

@@ -12,6 +12,19 @@ spec.loader.exec_module(inputs)
 
 
 class InputsTest(unittest.TestCase):
+    def test_legacy_baseline_without_app_still_accepts_sizing_changes(self):
+        for cloud in ("aws", "gcp"):
+            baseline = self.base(cloud)
+            baseline.pop("app")
+            if cloud == "aws":
+                baseline["postgres_version"] = "16"
+            rendered = inputs.merge_overrides(cloud, baseline, {"compute_disk_gib": 40})
+            self.assertNotIn("app", rendered)
+            self.assertEqual(rendered["sizing"]["compute_disk_gib"], 40)
+            baseline["app"] = {}
+            with self.assertRaises(ValueError):
+                inputs.validate_config(cloud, baseline)
+
     def base(self, cloud="aws"):
         return inputs.load_json(ROOT / f"environments/{cloud}/deployment.example.tfvars.json")
 

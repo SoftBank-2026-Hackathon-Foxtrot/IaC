@@ -1,14 +1,14 @@
 # The private network between the platform and the app environments: tailnet policy, split DNS
 # for *.internal, and one reusable, pre-approved auth key per role, written straight into the
-# secret slots the gateway and the app VMs read at boot.
+# secret slots the gateway and the shared cloud routers read at boot.
 
 locals {
   ts_tags = { mgmt = "tag:mgmt", aws = "tag:aws", gcp = "tag:gcp" }
   ts_routes = {
-    "10.30.0.0/16" = ["tag:mgmt"]
-    "10.10.0.0/16" = ["tag:aws"]
-    "10.20.0.0/16" = ["tag:gcp"]
-    "10.21.0.0/16" = ["tag:gcp"]
+    (var.vpc_cidr)                                                                                                                                       = ["tag:mgmt"]
+    (local.provisioner_baseline.aws.baseline.network.vpc_cidr)                                                                                           = ["tag:aws"]
+    (local.provisioner_baseline.gcp.baseline.network.subnet_cidr)                                                                                        = ["tag:gcp"]
+    ("${local.provisioner_baseline.gcp.baseline.network.service_range_address}/${local.provisioner_baseline.gcp.baseline.network.service_range_prefix}") = ["tag:gcp"]
   }
 }
 
@@ -66,7 +66,7 @@ moved {
   to   = aws_secretsmanager_secret_version.tailscale_mgmt
 }
 
-# App VMs: the slots come from environments/foundation/*; this root fills them.
+# Shared cloud routers: the slots come from environments/foundation/*; this root fills them.
 data "aws_secretsmanager_secret" "tailscale_aws" {
   name = "foxtrot/tailscale-authkey-aws"
 }

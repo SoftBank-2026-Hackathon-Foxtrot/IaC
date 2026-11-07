@@ -53,3 +53,17 @@ variable "enable_cloudflare_tunnel" {
   nullable    = false
   description = "cloudflared용 outbound TCP/UDP 7844. 터널 설치/등록은 별도 배포."
 }
+
+variable "postgres_version" {
+  type    = string
+  default = null
+  validation {
+    condition     = var.postgres_version == null ? true : contains(["16", "17"], var.postgres_version)
+    error_message = "Use PostgreSQL 16 or 17."
+  }
+}
+locals {
+  postgres_version         = coalesce(var.postgres_version, var.app == null ? "16" : "17")
+  redis_auth               = coalesce(var.redis_auth, var.app == null)
+  redis_transit_encryption = coalesce(var.redis_transit_encryption, var.app == null)
+}

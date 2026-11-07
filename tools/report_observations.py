@@ -32,15 +32,15 @@ def plan_counts(plan):
     return counts
 
 
-def infra_report(workflow, job, plan, handoff=None):
+def infra_report(workflow, job, plan=None, handoff=None):
     if job.get("migration_id") != workflow or job.get("type") not in ("PLAN", "APPLY"):
         raise ValueError("Job must belong to this workflow and be PLAN or APPLY")
-    if job.get("status") not in ("QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "UNKNOWN"):
+    if job.get("status") not in ("QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "UNKNOWN", "NEEDS_RECONCILIATION"):
         raise ValueError("Unsupported job status")
     # The repository examples lack observed_at and cannot be submitted as completed work.
     observed_at = timestamp(job["observed_at"])
     data = {"workflowId": workflow, "stage": job["type"], "status": job["status"],
-            "jobId": job["id"], "observedAt": observed_at, "changes": plan_counts(plan)}
+            "jobId": job["id"], "observedAt": observed_at, "changes": plan_counts(plan) if plan else None}
     for source, target in (("requested_at", "requestedAt"), ("started_at", "startedAt"),
                            ("finished_at", "finishedAt")):
         data[target] = timestamp(job[source]) if job.get(source) else None
@@ -53,6 +53,35 @@ def infra_report(workflow, job, plan, handoff=None):
         data.update(targetRef=handoff["target"]["id"], cloud=handoff["target"]["cloud"],
                     vmId=handoff["outputs"]["compute"]["id"])
     return {"resource": "INFRA", "data": data}
+
+
+def provisioner_reports(workflow, environment, job):
+    """Project real /v1/environments and /v1/jobs responses, without secrets or log tails."""
+    if environment.get("workflowId") != workflow or job.get("environmentId") != environment.get("environmentId"):
+        raise ValueError("Environment and job must belong to this workflow")
+    readiness = environment.get("readiness") or {}
+    infra, app = readiness.get("infrastructure", {}), readiness.get("application", {})
+    handoff = environment.get("handoff") or {}
+    base = {"workflowId": workflow, "targetRef": environment["environmentId"], "cloud": environment["cloud"],
+            "vmId": handoff.get("compute", {}).get("id")}
+    counts = dict.fromkeys(("create", "update", "delete", "replace"), 0)
+    plan = environment.get("plan")
+    for action, value in (plan or {}).get("changes", {}).items():
+        key = "replace" if "create" in action and "delete" in action else action
+        if key in counts:
+            counts[key] += value
+    infra_at = infra.get("observedAt") or job.get("finishedAt") or job.get("startedAt") or job["createdAt"]
+    infra_ready = infra.get("status") == "READY" and bool(infra.get("observedAt"))
+    infra_status = "SUCCEEDED" if infra_ready else ("UNKNOWN" if job["kind"] == "CHECK_APP" else job["status"])
+    # Keep adapter COMPUTE evidence intact. The existing preparation contract accepts a list
+    # of scalar checks, so both readiness results fit without replacing adapter operations.
+    checks = [f"INFRA={infra.get('status', 'UNKNOWN')}; observedAt={infra.get('observedAt')}",
+              f"APP={app.get('status', 'UNKNOWN')}; HTTP={app.get('httpStatus')}; observedAt={app.get('observedAt')}; scope=APP_HTTP_READINESS"]
+    return [{"resource": "INFRA", "data": {**base, "stage": "APPLY" if infra_ready else job["kind"],
+        "status": infra_status, "jobId": infra.get("jobId") or job["jobId"], "observedAt": timestamp(infra_at),
+        "finishedAt": timestamp(infra["observedAt"]) if infra.get("observedAt") else None,
+        "changes": counts if plan else None, "check": checks}}]
+
 
 
 def compute_report(workflow, migration):
@@ -91,8 +120,11 @@ def main():
     commands = parser.add_subparsers(dest="resource", required=True)
     infra = commands.add_parser("infra")
     infra.add_argument("--job-json", required=True)
-    infra.add_argument("--plan-json", required=True)
+    infra.add_argument("--plan-json")
     infra.add_argument("--handoff-json")
+    provisioner = commands.add_parser("provisioner")
+    provisioner.add_argument("--environment-json", required=True)
+    provisioner.add_argument("--job-json", required=True)
     compute = commands.add_parser("compute")
     compute.add_argument("--adapter-url", required=True)
     compute.add_argument("--migration-id", required=True)
@@ -101,6 +133,11 @@ def main():
     args = parser.parse_args()
     url = args.control_plane.rstrip("/") + "/internal/workflows/" + quote(args.workflow, safe="") + "/preparation"
     while True:
+        if args.resource == "provisioner":
+            for report in provisioner_reports(args.workflow, load(args.environment_json), load(args.job_json)):
+                request(url, os.environ[args.token_env], report)
+            print(f"Infrastructure and app observations recorded for {args.workflow}", flush=True)
+            return
         if args.resource == "infra":
             report = infra_report(args.workflow, load(args.job_json), load(args.plan_json), load(args.handoff_json))
         else:

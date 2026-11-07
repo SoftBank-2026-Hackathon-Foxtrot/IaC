@@ -75,3 +75,22 @@ run "reject_non_redis_port" {
   variables { redis_ports = [22] }
   expect_failures = [var.redis_ports]
 }
+
+run "app_readiness_uses_explicit_remote_ports" {
+  command = plan
+  variables {
+    app_ports              = [8000]
+    app_security_group_ids = ["sg-0123456789abcdef3"]
+    service_ports          = [6432, 8080]
+  }
+  assert {
+    condition = length(aws_vpc_security_group_ingress_rule.remote_app) == 2 && alltrue([
+      for rule in aws_vpc_security_group_ingress_rule.remote_app : rule.from_port == 8000 && contains(var.remote_cidrs, rule.cidr_ipv4)
+    ])
+    error_message = "Readiness ingress must target only the app group, its port and configured private source networks."
+  }
+  assert {
+    condition     = alltrue([for rule in aws_vpc_security_group_ingress_rule.remote_database : rule.from_port == 5432])
+    error_message = "App probes must not open extra database ports."
+  }
+}

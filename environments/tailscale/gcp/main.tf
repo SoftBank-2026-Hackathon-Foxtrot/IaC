@@ -24,7 +24,7 @@ data "google_compute_subnetwork" "router" {
 locals {
   advertised_cidrs = setunion(toset([data.google_compute_subnetwork.router.ip_cidr_range]), var.service_cidrs)
   network_tag      = var.name
-  forwarding_ports = sort([for port in setunion(toset([5432]), var.redis_ports) : tostring(port)])
+  forwarding_ports = sort([for port in setunion(toset([5432]), var.redis_ports, var.app_ports, var.service_ports) : tostring(port)])
 }
 module "bootstrap" {
   source            = "../../../modules/tailscale_bootstrap"
@@ -173,5 +173,19 @@ output "routing_scope" {
   value = {
     network                       = var.network_name, remote_cidrs = var.remote_cidrs,
     private_services_peering_name = var.private_services_peering_name, db_port = 5432, redis_ports = var.redis_ports
+  }
+}
+
+resource "google_compute_firewall" "remote_app" {
+  count                   = length(var.app_ports) > 0 && length(var.client_service_account_emails) > 0 ? 1 : 0
+  name                    = "${var.name}-remote-app"
+  network                 = data.google_compute_network.network.self_link
+  direction               = "INGRESS"
+  priority                = 900
+  source_ranges           = var.remote_cidrs
+  target_service_accounts = var.client_service_account_emails
+  allow {
+    protocol = "tcp"
+    ports    = [for p in var.app_ports : tostring(p)]
   }
 }

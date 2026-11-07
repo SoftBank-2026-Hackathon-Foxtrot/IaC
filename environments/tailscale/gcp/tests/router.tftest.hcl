@@ -76,3 +76,19 @@ run "reject_non_redis_port" {
   variables { redis_ports = [22] }
   expect_failures = [var.redis_ports]
 }
+
+run "app_readiness_uses_private_routes" {
+  command = plan
+  variables {
+    app_ports     = [8000]
+    service_ports = [6432, 8080]
+  }
+  assert {
+    condition     = google_compute_firewall.remote_app[0].source_ranges == var.remote_cidrs && one(google_compute_firewall.remote_app[0].allow).ports == tolist(["8000"])
+    error_message = "App readiness ingress must use the private source ranges and selected app port."
+  }
+  assert {
+    condition     = contains(one(google_compute_firewall.remote_clients[0].allow).ports, "6432")
+    error_message = "Apps must be able to reach the platform PgBouncer through the shared router."
+  }
+}

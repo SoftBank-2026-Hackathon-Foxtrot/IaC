@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS jobs(
 CREATE TABLE IF NOT EXISTS idempotency(
   key TEXT PRIMARY KEY, body_hash TEXT NOT NULL, status INTEGER NOT NULL, response TEXT NOT NULL);
 """
-JSON_COLUMNS = ("request", "tfvars", "plan", "handoff")
+JSON_COLUMNS = ("request", "tfvars", "plan", "handoff", "readiness")
 
 
 class Store:
@@ -28,6 +28,11 @@ class Store:
         self.lock = threading.RLock()
         with self.lock:
             self.db.executescript(SCHEMA)
+            columns = {r[1] for r in self.db.execute("PRAGMA table_info(environments)")}
+            if "readiness" not in columns:
+                self.db.execute("ALTER TABLE environments ADD COLUMN readiness TEXT")
+                # Old READY meant only apply completion. Never invent an app health result.
+                self.db.execute("UPDATE environments SET status='INFRA_READY' WHERE status='READY'")
 
     def _env(self, row) -> dict | None:
         if row is None:
@@ -40,8 +45,10 @@ class Store:
     def insert_environment(self, env: dict) -> None:
         with self.lock:
             self.db.execute(
-                "INSERT INTO environments VALUES (:id,:org_id,:cloud,:template,:deployment_id,:status,:request,:tfvars,"
-                ":plan,:handoff,:error,:created_at,:updated_at)",
+                "INSERT INTO environments (id,org_id,cloud,template,deployment_id,status,request,tfvars,"
+                "plan,handoff,error,created_at,updated_at,readiness) VALUES "
+                "(:id,:org_id,:cloud,:template,:deployment_id,:status,:request,:tfvars,"
+                ":plan,:handoff,:error,:created_at,:updated_at,:readiness)",
                 {**env, **{c: json.dumps(env.get(c)) if env.get(c) is not None else None for c in JSON_COLUMNS},
                  "error": env.get("error")})
 

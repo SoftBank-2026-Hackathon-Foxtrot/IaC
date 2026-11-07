@@ -40,7 +40,7 @@ module "firewall" {
   admin_cidrs              = var.admin_cidrs
   proxy_cidrs              = var.proxy_cidrs
   enable_cloudflare_tunnel = var.enable_cloudflare_tunnel
-  enable_tailscale         = var.tailscale != null
+  enable_tailscale         = false
   service_cidr             = "${var.network.service_range_address}/${var.network.service_range_prefix}"
 }
 module "compute" {
@@ -54,8 +54,8 @@ module "compute" {
   image                 = var.image
   subnetwork_id         = module.network.subnetwork_id
   service_account_email = module.iam.service_account_email
-  startup_script        = module.app_runtime.script
-  can_ip_forward        = var.tailscale != null
+  startup_script        = try(module.app_runtime[0].script, null)
+  can_ip_forward        = false
   depends_on            = [module.firewall, google_secret_manager_secret_iam_member.app]
 }
 module "cloud_sql" {
@@ -73,6 +73,7 @@ module "cloud_sql" {
   app_service_account = module.iam.service_account_email
   deletion_protection = var.deletion_protection
   admin_password      = random_password.db_admin.result
+  postgres_version    = local.postgres_version
   authorized_networks = var.db_authorized_networks
   depends_on          = [module.network]
 }
@@ -85,7 +86,7 @@ module "memorystore" {
   service_range_name = module.network.service_range_name
   memory_gib         = var.sizing.cache_memory_gib
   high_availability  = var.sizing.cache_high_availability
-  auth_enabled       = var.redis_auth
-  transit_encryption = var.redis_transit_encryption
+  auth_enabled       = local.redis_auth
+  transit_encryption = local.redis_transit_encryption
   depends_on         = [module.network]
 }

@@ -4,8 +4,8 @@ resource "aws_db_subnet_group" "this" {
   tags       = var.tags
 }
 resource "aws_db_parameter_group" "this" {
-  name   = "${var.name}-pg17"
-  family = "postgres17"
+  name   = "${var.name}-pg${split(".", var.engine_version)[0]}"
+  family = "postgres${split(".", var.engine_version)[0]}"
   parameter {
     name  = "rds.force_ssl"
     value = "1"

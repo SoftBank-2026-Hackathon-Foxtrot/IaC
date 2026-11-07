@@ -106,6 +106,13 @@ resource "aws_dynamodb_table" "pk_sk" {
     name = "sk"
     type = "S"
   }
+  dynamic "ttl" {
+    for_each = each.value == "foxtrot-control-plane" ? [1] : []
+    content {
+      attribute_name = "expiresAt"
+      enabled        = true
+    }
+  }
   point_in_time_recovery { enabled = true }
 }
 resource "aws_dynamodb_table" "db_operator" {
@@ -128,7 +135,7 @@ resource "aws_dynamodb_table" "db_operator" {
 # Tokens between platform services: generated here.
 locals {
   generated = ["db-adapter-token", "redis-admin-token", "object-adapter-token", "traffic-service-token",
-  "workload-token", "provisioner-token", "db-pgbouncer-admin-password"]
+  "workload-token", "provisioner-token", "observation-token", "db-pgbouncer-admin-password"]
   # Values that come from other systems: created with the placeholder UNSET; owners overwrite
   # them (Terraform ignores later changes). Services treat UNSET as "not configured".
   external = {

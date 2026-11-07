@@ -2,6 +2,8 @@
 
 이 저장소는 **유저 앱 환경 하나를 처음부터 끝까지** 만듭니다. 대상은 네트워크, 데이터 저장소, 그리고 레지스트리 이미지로 실제로 실행 중인 앱입니다. 환경은 플랫폼 리소스(관리 VPC의 control-plane, 이전 서버, PgBouncer, Redis 프록시)와 **다른 VPC**에 생깁니다. 플랫폼 쪽 배포는 이 문서의 범위 밖입니다.
 
+[main 통합: 호환성·앱 준비 확인·공유 라우터 연결](release-integration.md)을 먼저 확인하세요.
+
 - 1차 목표: 치이카와 공구앱 환경 (`chiikawa-groupbuy`)
 - 2차 목표: org와 클라우드 종류를 요청 본문으로 받아 그 클라우드에 맞는 환경을 만드는 API (`provisioner/`)
 - 전제: 앱 Docker 이미지는 이미 각 클라우드 레지스트리(ECR, Artifact Registry)에 있습니다.
@@ -47,9 +49,9 @@ foundation의 Terraform state는 실행한 위치의 로컬 파일입니다. 잃
 
 1. Docker 설치, 레지스트리 로그인(ECR: 인스턴스 역할 / AR: VM 서비스 계정 토큰), 이미지 pull
 2. 비밀 저장소에서 앱 DB 비밀번호, DB 관리자 자격, (GCP) HMAC secret을 읽어 `/etc/foxtrot/*.env`(root 600)에 기록. **Terraform user data·metadata에는 비밀값이 없습니다**
-3. 앱 이미지로 일회성 컨테이너를 띄워 관리자 권한으로 앱 role `app` 생성·권한 부여, 앱 role로 앱의 `init_schema` 실행. 테이블은 앱 role 소유로 두 클라우드에서 같은 schema가 됩니다
+3. 앱 이미지로 일회성 컨테이너를 띄워 관리자 권한으로 앱 role `app` 생성·권한 부여까지만 수행. 스키마·테이블·데이터는 사용자 앱이 시작할 때 준비합니다
 4. `app-api`, `app-worker-1..N` 컨테이너 실행 (`--restart unless-stopped`, host network, 포트 80)
-5. DB가 비어 있고 `seed_demo_data=true`이면 `/seed` 한 번 호출. 이전 대상 환경은 `seed_demo_data=false`로 둡니다
+5. IaC는 `/seed`를 호출하지 않습니다. 별도 CHECK_APP 작업이 사설 `/readyz` 응답을 확인합니다
 6. 로그: VM의 `/var/log/foxtrot-app.log`
 
 ## 바로 띄우기 (CLI)
@@ -86,7 +88,8 @@ Idempotency-Key: <키>
 |---|---|
 | `POST /v1/environments` | 202 `{environmentId, jobId, deploymentId}`. `mode: "plan"`이면 계획까지만 |
 | `POST /v1/environments/{id}/apply` | PLANNED 환경의 저장된 계획 실행 |
-| `GET /v1/environments/{id}` | 상태(`PLANNING`→`APPLYING`→`READY`, `FAILED`, `NEEDS_RECONCILIATION`, `DESTROYED`), 앱 URL, handoff |
+| `GET /v1/environments/{id}` | 상태(`PLANNING`→`APPLYING`→`INFRA_READY`→`VERIFYING_APP`→`READY`/`APP_NOT_READY`, `FAILED`, `NEEDS_RECONCILIATION`, `DESTROYED`), 앱 URL, handoff |
+| `POST /v1/environments/{id}/check-app` | Terraform 재실행 없이 앱 준비 확인 |
 | `DELETE /v1/environments/{id}` | 환경이 만든 자원 전부 삭제 |
 | `GET /v1/jobs/{id}` | 작업 상태와 Terraform 로그 끝부분 |
 
@@ -105,8 +108,8 @@ Idempotency-Key: <키>
 - **터널 연결 (A안):** `POST /v1/environments/{id}/update` `{app: {port: 8000, tunnelSecret: <foxtrot/app/cloudflare-tunnel-aws>}}`로 트래픽 팀의 `foxtrot-traffic-aws` 터널을 새 앱 VM이 넘겨받음. 터널 토큰이 있으면 provisioner가 7844 송신을 엶. 테스트 EC2 `foxtrot-traffic-test-a`는 중지(삭제 아님). `https://aws.foxtrot.live`, `https://app.foxtrot.live` 모두 치이카와 앱 응답.
 - **채팅 WebSocket (2026-11-07):** 앱은 WebSocket의 Origin과 Host가 같아야 받는데, LB pool이 Host를 `aws.foxtrot.live`로 바꿔 보내서 `app.foxtrot.live`에서 403이었음. aws·gcp 터널에 `app.foxtrot.live → 127.0.0.1:8000` 경로를 추가하고, 두 pool의 엔드포인트 Host 헤더를 `app.foxtrot.live`로 바꿈(앱은 수정하지 않음). 이후 화면·API·DB/Redis·채팅(`history`, `ready`) 점검 모두 통과. 모니터는 `aws.`/`gcp.` 경로로 그대로 동작.
 
-## 남은 것
+## 앱·DB 어댑터와의 계약
 
-- DB 이전 에이전트는 "앱 writer가 table 소유권을 갖지 않는다"를 요구하지만, 현재 앱은 시작할 때 `CREATE TABLE/INDEX IF NOT EXISTS`를 실행하므로 앱 role이 테이블을 소유해야 합니다. 앱의 schema 생성을 분리할지 DB 담당과 정해야 합니다.
-- 플랫폼 관리 VPC와의 사설 경로(Tailscale 서브넷 라우터, peering)는 이 환경이 만들지 않습니다. `proxy_cidrs`, `migration_source_cidrs`로 방화벽만 엽니다.
+- 테이블 생성은 사용자 앱 책임입니다. DB 이전 에이전트는 "앱 writer가 table 소유권을 갖지 않는다"를 요구하지만, 현재 앱은 시작할 때 `CREATE TABLE/INDEX IF NOT EXISTS`를 실행하므로 앱 role이 테이블을 소유해야 합니다. 마이그레이션에 필요한 owner/writer 분리는 앱과 DB 어댑터에서 결정합니다.
+- 사설 경로는 별도 공유 Tailscale 라우터 root가 관리합니다. 앱 환경의 `router_inputs`를 연결합니다.
 - 기존 `contracts/provisioning.openapi.yaml`(관리 중인 환경의 사양 조정 API)은 그대로 두었습니다. 새 `/v1/environments`와 합칠지는 정해야 합니다.

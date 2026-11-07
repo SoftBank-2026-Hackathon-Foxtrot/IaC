@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .service import Conflict, NotFound, Service
 from .spec import RequestError
 
-ENV = re.compile(r"^/v1/environments/(env-[a-f0-9]{12})(/apply|/update)?$")
+ENV = re.compile(r"^/v1/environments/(env-[a-f0-9]{12})(/apply|/update|/check-app|/workflow)?$")
 JOB = re.compile(r"^/v1/jobs/(job-[a-f0-9]{12})$")
 MAX_BODY = 64 * 1024
 
@@ -90,6 +90,10 @@ class Handler(BaseHTTPRequestHandler):
                 return service.apply(env_id)
             if apply == "/update" and self.command == "POST":
                 return service.update(env_id, self.body())
+            if apply == "/check-app" and self.command == "POST":
+                return service.check_app(env_id)
+            if apply == "/workflow" and self.command == "POST":
+                return service.bind_workflow(env_id, self.body())
             if not apply and self.command == "GET":
                 return 200, service.get(env_id)
             if not apply and self.command == "DELETE":
