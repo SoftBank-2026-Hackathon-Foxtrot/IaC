@@ -108,6 +108,8 @@ module "db_migration" {
       "dynamodb:DeleteItem", "dynamodb:ConditionCheckItem"] },
       # Per-database credentials registered in the catalog (secret_ref).
       { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:foxtrot/*" },
+      # The adaptor checks that a registered RDS is a running standalone instance (read-only).
+      { Effect = "Allow", Action = ["rds:DescribeDBInstances"], Resource = "*" },
     ]
   })
   depends_on = [aws_secretsmanager_secret_version.db_runtime, aws_secretsmanager_secret_version.generated]
