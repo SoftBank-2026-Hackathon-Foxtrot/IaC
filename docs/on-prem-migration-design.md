@@ -1,6 +1,8 @@
 # 클라우드 → 온프레미스 마이그레이션 설계
 
-2026-11-07 · 설계 제안 · 실행 코드와 배포 설정에는 아직 반영하지 않음
+2026-11-07 · 설계 및 1차 구현 · 호스트·데이터 서비스 준비는 구현, 마이그레이션 연결은 후속 단계
+
+[개인 PC 한 대 설정 및 구현 범위](on-prem-setup.md)
 
 [Notion 설계 문서](https://app.notion.com/p/411b7958f32781dabecec0c05041f4e6)
 
@@ -13,7 +15,7 @@
 첫 구현의 범위는 다음과 같다.
 
 - 관리 서버와 컨트롤 플레인은 현재 위치에 유지한다. 온프렘에는 앱과 대상 데이터 서비스를 배치한다.
-- 전용 Linux 서버/VM, Docker, 원본 이미지와 같은 CPU 아키텍처를 사용한다. PoC 기본은 Ubuntu 24.04 / amd64다.
+- 기존 개인 PC 한 대 또는 Linux 서버/VM에서 Docker와 원본 이미지와 같은 CPU 아키텍처를 사용한다. 기존 작업과 공존하는 전용 runtime 디렉터리를 관리한다. PoC 기본은 Ubuntu 24.04 / amd64다.
 - 대상 서비스는 PostgreSQL 17, Valkey 8, SeaweedFS다. 정확한 이미지 digest와 설정 버전은 승인된 배포 프로필에 고정한다.
 - 기존 Redis·오브젝트·트래픽 모듈을 연결한다. DB에는 클라우드 PostgreSQL → 자체 운영 PostgreSQL용 프로필을 추가한다.
 - 업무 테이블은 앱이 만든다. Ansible은 DB 서비스·계정·접근 권한까지만 준비한다.
@@ -82,7 +84,7 @@ Ansible playbook에서 DB 복제·Redis 컷오버·Cloudflare 가중치 변경�
 | `network` | 사이트/관리/클라우드 CIDR, 라우터 참조, DNS, 허용 연결 |
 | `capacity` | 최소 CPU/RAM/가용 디스크, 데이터 경로, 사용 중인 포트. 배포 사전 검사에 사용 |
 
-한 서버에 여러 역할을 배치할 수 있다. 첫 버전은 전용 서버를 환경 하나에 예약하며, 이미 다른 환경이 사용하거나 기존 데이터/서비스가 충돌하면 중단한다. 서버를 새로 생성했다는 뜻으로 기록하지 않는다. 기존 DB/스토리지 채택은 별도 모드로 후속 확장한다.
+한 서버에 여러 역할을 배치할 수 있다. 첫 버전은 등록한 호스트를 환경 하나에 예약한다. 개인 PC의 기존 컨테이너와 공존할 수 있지만, 관리할 runtime 디렉터리·서비스 포트·데이터 소유권이 충돌하면 중단한다. 서버를 새로 생성했다는 뜻으로 기록하지 않는다. 기존 DB/스토리지 채택은 별도 모드로 후속 확장한다.
 
 사이트의 첫 관리 경로는 사전 조건이다. 기존 VPN/SSH 경로 또는 현장에서 1회 수행한 Tailscale bootstrap으로 라우터에 접근할 수 있어야 한다. 접근할 수 없는 서버에 중앙 Ansible이 먼저 접속해 자기 접속 경로를 설치하는 순환 의존을 만들지 않는다.
 
@@ -90,7 +92,7 @@ Ansible playbook에서 DB 복제·Redis 컷오버·Cloudflare 가중치 변경�
 
 기존 `/v1/environments` 요청·응답, AWS/GCP 기본값, `handoff.schema_version=1`을 유지한다. v1 요청은 내부에서 `kind=cloud, driver=terraform`으로 정규화한다. 온프렘을 기존 `cloud` enum에 넣거나 AWS/GCP 값으로 위장하지 않는다.
 
-새 실행 API의 예시다. 아래 필드와 `/v2` 경로는 **제안**이며 현재 호출할 수 없다.
+새 실행 API의 예시다. 온프렘 `/v2` 준비 API는 1차 구현됐다. 실제 입력·출력은 [실행 명세](../contracts/onprem.openapi.yaml)를 따른다. 아래 내용 중 클라우드 v2·앱 배포 binding·모듈 등록은 후속 설계다.
 
 ```json
 {
@@ -263,7 +265,7 @@ PostgreSQL 논리 복제는 DDL과 sequence 상태를 자동 복제하지 않는
 
 ## 7. Tailscale·프록시·공용 트래픽
 
-클라우드 쪽은 이미 통합된 `environments/tailscale/aws`, `environments/tailscale/gcp`를 재사용한다. 온프렘에는 전용 라우터의 bootstrap/서비스를 관리하는 Ansible role을 추가한다. 앱 서버가 라우터를 겸하지 않도록 한다. 기존 bootstrap의 route 광고, forwarding, SNAT 비활성, MSS 설정 정책을 온프렘 OS에 맞춰 적용한다.
+클라우드 쪽은 이미 통합된 `environments/tailscale/aws`, `environments/tailscale/gcp`를 재사용한다. 현재 개인 PC 한 대는 기존 tailnet에 직접 가입하고 Tailscale IPv4를 관리·서비스 주소로 사용한다. 별도 사설 관리망이나 온프렘 subnet router는 요구하지 않는다. 아래 LAN 반환 경로와 forwarding 정책은 이후 사설 LAN을 연결할 때의 확장 설계다.
 
 | 연결 | 검사할 내용 |
 |---|---|

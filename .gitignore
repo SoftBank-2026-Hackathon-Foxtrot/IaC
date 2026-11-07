@@ -55,3 +55,6 @@ compute/binding.local.json
 
 # provisioner local config and workspaces
 provisioner/config.json
+
+# Operator-owned on-prem credentials, inventory and execution journal
+.onprem-local/

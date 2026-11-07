@@ -24,6 +24,7 @@ from . import spec
 from .store import Store
 from .terraform import Terraform, TerraformError
 from .readiness import AppChecker
+from .drivers.terraform import TerraformDriver
 
 
 class Conflict(Exception):
@@ -45,6 +46,8 @@ def now() -> str:
 class Service:
     def __init__(self, store: Store, terraform: Terraform, catalog: dict, config: dict, checker=None):
         self.store, self.tf, self.catalog, self.config = store, terraform, catalog, config
+        self.driver = TerraformDriver(terraform)
+        self.onprem = None
         self.checker = checker or AppChecker(config.get("readiness"))
         self.wake = threading.Event()
         self.today = lambda: dt.date.today()
@@ -186,6 +189,8 @@ class Service:
                                   error="process stopped while the job was running")
             self.store.update_environment(job["environment_id"], now(), status="NEEDS_RECONCILIATION",
                                           error="process stopped while a job was running")
+        if self.onprem:
+            self.onprem.recover()
 
     def run_forever(self, stop: threading.Event) -> None:
         while not stop.is_set():
@@ -196,7 +201,7 @@ class Service:
     def run_next(self) -> bool:
         job = self.store.next_queued()
         if not job:
-            return False
+            return self.onprem.run_next() if self.onprem else False
         self.execute(job)
         return True
 
@@ -206,10 +211,10 @@ class Service:
         self.store.update_job(job["id"], status="RUNNING", started_at=now())
         try:
             if job["kind"] in ("PLAN", "PLAN_APPLY"):
-                plan = self.tf.plan(env_id, cloud, env["tfvars"])
+                plan = self.driver.plan(env, env["tfvars"], {"intent": "prepare"})
                 self.store.update_environment(env_id, now(), plan=plan, status="PLANNED" if job["kind"] == "PLAN" else "APPLYING")
             if job["kind"] in ("APPLY", "PLAN_APPLY"):
-                handoff = self.tf.apply(env_id, cloud, "reviewed.tfplan")
+                handoff = self.driver.apply(env, {"plan": "reviewed.tfplan"}, {})
                 self.store.update_environment(env_id, now(), handoff=handoff, status="INFRA_READY", error=None,
                                               readiness={"infrastructure": {"status": "READY", "observedAt": now(), "jobId": job["id"]},
                                                          "application": {"status": "PENDING", "observedAt": None}})
@@ -234,8 +239,8 @@ class Service:
                         self._publish(env_id, job["id"])
                         return
             if job["kind"] == "DESTROY":
-                plan = self.tf.plan(env_id, cloud, env["tfvars"], destroy=True)
-                self.tf.apply(env_id, cloud, plan["plan"])
+                plan = self.driver.plan(env, env["tfvars"], {"intent": "cleanup"})
+                self.driver.cleanup(env, plan, {})
                 self.store.update_environment(env_id, now(), status="DESTROYED", handoff=None, error=None, readiness=None)
         except (TerraformError, OSError, ValueError) as exc:
             message = str(exc)[-2000:]

@@ -3,12 +3,15 @@
 #   docker buildx build --platform linux/amd64 -f provisioner/Dockerfile -t <registry>/provisioner:<tag> .
 FROM python:3.12-slim
 ARG TERRAFORM_VERSION=1.12.2
-RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates git \
+RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates git openssh-client \
  && curl -fsSL -o /tmp/tf.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
  && unzip /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip \
  && apt-get purge -y unzip && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 10001 app && useradd -u 10001 -g 10001 -m app
 WORKDIR /srv
+COPY requirements-onprem.txt .
+RUN pip install --no-cache-dir -r requirements-onprem.txt
+COPY ansible ansible
 COPY environments/aws environments/aws
 COPY environments/gcp environments/gcp
 COPY modules modules

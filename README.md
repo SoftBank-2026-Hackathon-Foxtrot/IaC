@@ -140,3 +140,5 @@ python tools/render_inputs.py render --cloud aws \
 ## 마이그레이션 관측
 
 실제 PLAN/APPLY와 COMPUTE 준비 결과를 컨트롤 플레인으로 보고하는 방법은 [관측 연결](docs/migration-observability.md)을 참고하세요.
+
+온프렘 실행 설정: [개인 PC 한 대 준비](docs/on-prem-setup.md) · [v2 API](contracts/onprem.openapi.yaml). 기존 AWS/GCP v1 API와 별도로 Ansible 경로를 제공한다.
