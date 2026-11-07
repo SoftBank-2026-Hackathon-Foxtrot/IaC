@@ -146,7 +146,9 @@ module "observability" {
       environment = {
         TEMPO_CONFIG = local.otel_tempo_config
       }
-      health = ["wget -qO- http://127.0.0.1:3200/ready > /dev/null || exit 1"]
+      # /ready stays 503 for minutes while the ring settles; the HTTP server answering is enough
+      # for the collector, which retries exports.
+      health = ["wget -qO- http://127.0.0.1:3200/api/echo > /dev/null || exit 1"]
     },
   ]
   depends_on = [aws_secretsmanager_secret_version.generated]
