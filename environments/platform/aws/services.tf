@@ -187,6 +187,10 @@ module "redis_migrator" {
       STATEMIG_CONTROL_FILE = "/state/control.json"
       STATEMIG_PROXY        = "http://redis-proxy.internal:7000"
       STATEMIG_SYNCWORKER   = "http://redis-syncworker.internal:7100"
+      # The Redis proxy stays in front for good (decided 11-07), also for seeds that name Redis by
+      # resource ref instead of registering a binding. Apps only hold the proxy address, so a
+      # source that refuses CLIENT LIST (Memorystore) is not a reason to stop the migration.
+      STATEMIG_PERSISTENT_PROXY = "true"
     })
     secrets = merge(local.redis_token, local.otel_secrets, { STATEMIG_ENDPOINTS = local.secret_arn["redis-endpoints-admin"] })
     mounts  = { state = "/state" }
