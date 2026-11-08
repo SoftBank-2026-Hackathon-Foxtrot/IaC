@@ -5,6 +5,10 @@ import uuid
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 
+from tools.telemetry import get_telemetry
+from tools.report_observations import compute_report
+from opentelemetry.trace import Status, StatusCode
+
 from . import runner
 
 
@@ -198,21 +202,44 @@ class Adapter:
                 return False
             db.execute("UPDATE operations SET status='RUNNING', started_at=? WHERE id=?", (now(), op["id"]))
             row = self.migration(db, op["migration"])
-        stage, result, error = row["stage"], None, None
-        try:
-            if row["target"] != canonical(self.target):
-                raise ValueError("Target registration changed")
-            result = runner.execute(op["step"], self.binding, self.target["targetRef"],
-                                    expected_revision=self.target["bindingRevision"], observe_only=op["action"] == "RECONCILE")
-            stage = "PREPARED" if op["step"] == "PREPARE" else "SYNCING"
-            outcome, health = "SUCCEEDED", "OK"
-        except Exception:
-            # START_SYNC may have created a container before an observation failed.
-            outcome = "FAILED" if op["step"] == "PREPARE" else "UNKNOWN"
-            health, error = outcome, f'{op["step"]} could not be verified; inspect the registered target'
-        with self.transaction() as db:
-            evidence = canonical(result) if result else None
-            db.execute("UPDATE operations SET status=?, error=?, result=?, finished_at=? WHERE id=?", (outcome, error, evidence, now(), op["id"]))
-            db.execute("""UPDATE migrations SET stage=?, health=?, active=NULL, updated=?,
-                          revision=revision+1, result=? WHERE id=?""", (stage, health, now(), evidence, row["id"]))
+        telemetry = get_telemetry("iac")
+        with telemetry.operation(op["action"], workflow=json.loads(row["plan"])["workflowId"],
+                                 migration=row["id"], operation=op["id"]) as span:
+            stage, result, error = row["stage"], None, None
+            try:
+                if row["target"] != canonical(self.target):
+                    raise ValueError("Target registration changed")
+                result = runner.execute(op["step"], self.binding, self.target["targetRef"],
+                                        expected_revision=self.target["bindingRevision"], observe_only=op["action"] == "RECONCILE")
+                stage = "PREPARED" if op["step"] == "PREPARE" else "SYNCING"
+                outcome, health = "SUCCEEDED", "OK"
+            except Exception:
+                # START_SYNC may have created a container before an observation failed.
+                outcome = "FAILED" if op["step"] == "PREPARE" else "UNKNOWN"
+                health, error = outcome, f'{op["step"]} could not be verified; inspect the registered target'
+            with self.transaction() as db:
+                evidence = canonical(result) if result else None
+                db.execute("UPDATE operations SET status=?, error=?, result=?, finished_at=? WHERE id=?", (outcome, error, evidence, now(), op["id"]))
+                db.execute("""UPDATE migrations SET stage=?, health=?, active=NULL, updated=?,
+                              revision=revision+1, result=? WHERE id=?""", (stage, health, now(), evidence, row["id"]))
+            if outcome != "SUCCEEDED":
+                span.set_status(Status(StatusCode.ERROR, outcome))
+            try:
+                view = self.get("migrations", row["id"])
+                report = compute_report(view["workflowId"], view)
+                telemetry.snapshot("COMPUTE", report["data"])
+            except Exception:
+                pass  # Telemetry does not change the persisted command result.
         return True
+
+
+    def publish_observations(self):
+        telemetry = get_telemetry("iac")
+        if not telemetry.enabled:
+            return
+        with self.transaction() as db:
+            ids = [row[0] for row in db.execute("SELECT id FROM migrations ORDER BY updated DESC LIMIT 256")]
+        for mid in ids:
+            view = self.get("migrations", mid)
+            report = compute_report(view["workflowId"], view)
+            telemetry.snapshot("COMPUTE", report["data"])

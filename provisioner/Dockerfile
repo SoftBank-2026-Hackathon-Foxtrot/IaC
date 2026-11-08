@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-c
  && apt-get purge -y unzip && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 10001 app && useradd -u 10001 -g 10001 -m app
 WORKDIR /srv
+COPY requirements-observability.txt ./
+RUN pip install --no-cache-dir -r requirements-observability.txt
 COPY environments/aws environments/aws
 COPY environments/gcp environments/gcp
 COPY modules modules

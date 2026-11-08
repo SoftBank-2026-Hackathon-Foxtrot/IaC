@@ -52,13 +52,9 @@ IaC는 DB 인스턴스, DB 계정과 CONNECT/스키마 접근 권한을 준비�
 
 ## 관측 연결
 
-생성 요청의 `workflowId` 또는 CLI `--workflow-id`를 CP workflow와 일치시킵니다. 이미 배포한 환경은 `POST /v1/environments/{id}/workflow`에 `{"workflowId":"..."}`를 보내 재배포 없이 연결하고 `/check-app`으로 보고합니다. 서버 설정에 다음을 넣으면 작업 완료 시 INFRA 결과의 check에 인프라와 앱 HTTP 준비 상태·각 관측 시각을 함께 보고합니다. COMPUTE 어댑터의 명령·이미지·컨테이너 관측을 덮어쓰지 않습니다.
+생성 요청의 `workflowId` 또는 CLI `--workflow-id`를 CP workflow와 일치시킵니다. 이미 배포한 환경은 `POST /v1/environments/{id}/workflow`로 연결할 수 있습니다. 프로세스에 OTEL endpoint와 module ingest headers를 주입하면 별도 observer가 INFRA 상태를 발행합니다. 기존 `observations.controlPlaneUrl/tokenEnv`와 preparation POST는 사용하지 않습니다.
 
-```json
-{"observations": {"controlPlaneUrl": "http://control-plane.internal:8000", "tokenEnv": "OBSERVATION_TOKEN"}}
-```
-
-플랫폼 root는 전용 observation token, CP 수신 설정과 DynamoDB `expiresAt` TTL을 연결합니다. 관측 수신 API가 포함된 CP 이미지를 배포해야 합니다. 전송 실패는 `readiness.reporting`에 표시하며 성공한 인프라를 실패로 바꾸지 않습니다. 토큰/네트워크 복구 후 `/check-app` 또는 보고 CLI로 재전송합니다. workflowId 없는 기존 호출은 그대로 동작하며 다른 workflow로 임의 보고하지 않습니다.
+상세 설정은 [OTEL 수집 stack과 배포 연결](migration-observability.md)을 따릅니다. `QUEUED_OTEL`은 비동기 큐 접수이며 최종 수신 확인은 CP 화면에서 합니다. 인프라/app 준비 상태와 각 원 시각, COMPUTE의 별도 작업 근거를 보존합니다. 전송 장애가 성공한 배포를 실패로 바꾸지 않습니다.
 
 ## 실행 범위
 

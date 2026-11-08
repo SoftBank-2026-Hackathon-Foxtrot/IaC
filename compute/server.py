@@ -5,6 +5,8 @@ import json
 import os
 import re
 import threading
+
+from tools.telemetry import get_telemetry
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -64,6 +66,15 @@ def work(adapter, stopping):
             stopping.wait(0.25)
 
 
+def observe(adapter, stopping):
+    while not stopping.is_set():
+        try:
+            adapter.publish_observations()
+        except Exception:
+            pass  # Read-only observation never changes command execution.
+        stopping.wait(5)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--handoff", type=Path, required=True)
@@ -80,11 +91,15 @@ def main():
         stopping = threading.Event()
         worker = threading.Thread(target=work, args=(service.adapter, stopping))
         worker.start()
+        observer = threading.Thread(target=observe, args=(service.adapter, stopping), daemon=True)
+        observer.start()
         try:
             service.serve_forever()
         finally:
             stopping.set()
             worker.join()
+            observer.join(timeout=3)
+            get_telemetry("iac").close()
 
 
 if __name__ == "__main__":
