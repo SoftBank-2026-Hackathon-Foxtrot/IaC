@@ -113,11 +113,14 @@ class SpecTest(unittest.TestCase):
         self.assertEqual(aws["secret_env"]["WORKLOAD_TOKEN"], "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:wl")
         gcp = spec.render(spec.parse(body(cloud="gcp"), CATALOG, config), CATALOG, config, "a1b2", TODAY)["app"]
         self.assertEqual(gcp["api_env"]["WORKLOAD_ACTOR"], "chiikawa-gcp-api")
+        self.assertEqual(aws["api_env"]["ENABLE_ORDER_DEMO"], "1")
+        self.assertEqual(gcp["api_env"]["ENABLE_ORDER_DEMO"], "1")
         self.assertEqual(gcp["secret_env"]["WORKLOAD_TOKEN"], "projects/p/secrets/foxtrot-platform-workload-token")
         # The request still wins, and without the config nothing is added.
         mine = spec.render(spec.parse(body(app={"apiEnv": {"WORKLOAD_ACTOR": "other-api"}}), CATALOG, config),
                            CATALOG, config, "a1b2", TODAY)["app"]
         self.assertEqual(mine["api_env"]["WORKLOAD_ACTOR"], "other-api")
+        self.assertEqual(mine["api_env"]["ENABLE_ORDER_DEMO"], "1")  # template default kept
         self.assertNotIn("CONTROL_PLANE_URL", self.render(body())["app"].get("env", {}))
         del config["workload"]["tokenSecrets"]["gcp"]
         with self.assertRaises(spec.RequestError):

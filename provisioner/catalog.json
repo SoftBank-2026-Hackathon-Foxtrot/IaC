@@ -7,7 +7,10 @@
         "api_workers": 2,
         "worker_count": 2,
         "seed_demo_data": false,
-        "seed_close_in_s": 86400
+        "seed_close_in_s": 86400,
+        "api_env": {
+          "ENABLE_ORDER_DEMO": "1"
+        }
       }
     }
   }

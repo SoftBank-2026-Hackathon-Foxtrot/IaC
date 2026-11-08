@@ -23,6 +23,7 @@ class RequestError(ValueError):
 
 ORG_ID = re.compile(r"^[a-z][a-z0-9-]{1,30}[a-z0-9]$")
 SUFFIX = re.compile(r"^[a-f0-9]{4}$")
+ENV_FIELDS = ("env", "api_env", "worker_env", "secret_env")
 APP_FIELDS = {  # request (camelCase) -> Terraform app object
     "image": "image", "apiWorkers": "api_workers", "workerCount": "worker_count", "seedDemoData": "seed_demo_data",
     "env": "env", "apiEnv": "api_env", "workerEnv": "worker_env", "secretEnv": "secret_env",
@@ -198,7 +199,9 @@ def render(req: dict, catalog: dict, config: dict, suffix: str, today: dt.date) 
     port = req["app"].get("port", app.get("port", 80))
     require(type(port) is int and 1 <= port <= 65535, "app.port: an integer port")
     for key, value in req["app"].items():
-        app[APP_FIELDS[key]] = value
+        field = APP_FIELDS[key]
+        # Env maps add to the template's defaults (e.g. ENABLE_ORDER_DEMO); same names win.
+        app[field] = {**app.get(field, {}), **value} if field in ENV_FIELDS else value
     app["image"] = image
     # Platform defaults (server config "appEnv"): the app reaches its stores through the
     # platform's proxies so a migration can swap what is behind them. Request env wins.
